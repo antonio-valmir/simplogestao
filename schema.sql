@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS clientes (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(120) NOT NULL,
+    telefone VARCHAR(30),
+    email VARCHAR(120),
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS produtos (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(120) NOT NULL,
+    preco NUMERIC(10, 2) NOT NULL CHECK (preco >= 0),
+    estoque INTEGER NOT NULL DEFAULT 0 CHECK (estoque >= 0),
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS vendas (
+    id SERIAL PRIMARY KEY,
+    cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+    total NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (total >= 0),
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS itens_venda (
+    id SERIAL PRIMARY KEY,
+    venda_id INTEGER NOT NULL REFERENCES vendas(id) ON DELETE CASCADE,
+    produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE RESTRICT,
+    quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+    preco_unitario NUMERIC(10, 2) NOT NULL CHECK (preco_unitario >= 0)
+);
