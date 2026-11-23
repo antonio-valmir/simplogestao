@@ -9,7 +9,8 @@
 <body>
   {% set pagina = active_page|default('clientes') %}
   {% set empresa = empresa_ativa|default({'nome': 'Loja Horizonte', 'documento': 'CNPJ: 12.345.678/0001-90', 'status': 'Conectada'}) %}
-  {% set usuario = usuario_logado|default({'nome': 'Administrador', 'email': 'Sessão ativa'}) %}
+  {% set _nome_sessao = session.get('usuario_nome') or session.get('usuario_email') %}
+  {% set usuario = usuario_logado if usuario_logado is defined and usuario_logado else ({'nome': _nome_sessao, 'email': session.get('usuario_email') or 'Sessão ativa'} if _nome_sessao else {'nome': 'Administrador', 'email': 'Sessão ativa'}) %}
 
   <div class="app-shell">
     <aside class="sidebar">
@@ -74,10 +75,22 @@
             </a>
           </li>
           <li>
-            <a href="{{ safe_url('logout', '#') }}" class="nav-link">
+            <a href="{{ url_for('auth.cadastro') }}" class="nav-link {{ 'active' if pagina == 'cadastro' else '' }}">
+              <span class="nav-link-left"><span>➕</span><span>Criar Conta</span></span>
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('auth.login') }}" class="nav-link {{ 'active' if pagina == 'login' else '' }}">
+              <span class="nav-link-left"><span>🔑</span><span>Entrar</span></span>
+            </a>
+          </li>
+          {% if session.get('usuario_id') %}
+          <li>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link">
               <span class="nav-link-left"><span>🚪</span><span>Sair</span></span>
             </a>
           </li>
+          {% endif %}
         </ul>
       </div>
 
