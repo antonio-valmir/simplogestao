@@ -97,9 +97,24 @@ def index():
     return redirect(url_for("clientes"))
 
 
+def _garantir_colunas_clientes(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            ALTER TABLE clientes
+                ADD COLUMN IF NOT EXISTS cpf VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS cpf_digits VARCHAR(11),
+                ADD COLUMN IF NOT EXISTS cep VARCHAR(10),
+                ADD COLUMN IF NOT EXISTS endereco VARCHAR(200);
+            """
+        )
+    conn.commit()
+
+
 @app.route("/clientes", methods=["GET", "POST"])
 def clientes():
     with get_db_connection() as conn:
+        _garantir_colunas_clientes(conn)
         empresa = get_empresa_ativa(conn, session.get("empresa_id"))
         if not empresa:
             flash("Selecione ou cadastre uma empresa antes de acessar esta area.", "warning")
@@ -107,27 +122,52 @@ def clientes():
         empresa_id = empresa[0]
 
         if request.method == "POST":
-            nome = request.form.get("nome", "").strip()
-            telefone = request.form.get("telefone", "").strip() or None
-            email = request.form.get("email", "").strip() or None
+            nome = (request.form.get("nome") or "").strip()
+            cpf = (request.form.get("cpf") or "").strip() or None
+            cpf_digits = _somente_digitos(cpf) if cpf else None
+            telefone = (request.form.get("telefone") or "").strip() or None
+            email = (request.form.get("email") or "").strip() or None
+            cep = (request.form.get("cep") or "").strip() or None
+            endereco = (request.form.get("endereco") or "").strip() or None
 
-            if nome:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO clientes (empresa_id, nome, telefone, email)
-                        VALUES (%s, %s, %s, %s);
-                        """,
-                        (empresa_id, nome, telefone, email),
-                    )
-                conn.commit()
+            if not nome:
+                flash("Informe o nome completo do cliente.", "warning")
+            elif cpf_digits and len(cpf_digits) != 11:
+                flash("Informe um CPF valido com 11 digitos.", "warning")
+            else:
+                duplicado = False
+                if cpf_digits:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT id FROM clientes
+                            WHERE empresa_id = %s AND cpf_digits = %s;
+                            """,
+                            (empresa_id, cpf_digits),
+                        )
+                        if cur.fetchone():
+                            duplicado = True
+
+                if duplicado:
+                    flash("Ja existe um cliente com este CPF nesta empresa.", "warning")
+                else:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO clientes (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                            """,
+                            (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco),
+                        )
+                    conn.commit()
+                    flash("Cliente cadastrado com sucesso.", "success")
 
             return redirect(url_for("clientes"))
 
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, nome, telefone, email
+                SELECT id, nome, cpf, telefone, email, cep, endereco
                 FROM clientes
                 WHERE empresa_id = %s
                 ORDER BY id DESC;
