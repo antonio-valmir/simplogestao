@@ -286,31 +286,34 @@ def empresas():
             empresa_login_id = emp_id_form
             erro = "Informe CPF/CNPJ e senha para entrar nesta empresa."
 
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, nome, documento, doc_digits, status, criado_em FROM empresas ORDER BY id DESC;"
-            )
-            lista_empresas = cur.fetchall()
-
     auth_ids = _empresas_autenticadas_set()
     empresa_atual_id = session.get("empresa_id")
     empresas_fmt = []
     empresa_para_login = None
 
-    for e in lista_empresas:
-        item = {
-            "id": e[0],
-            "nome": e[1],
-            "documento": e[2] or e[3] or "",
-            "status": e[4],
-            "criado_em": e[5],
-            "autenticada": e[0] in auth_ids,
-            "ativa": empresa_atual_id == e[0] and (e[0] in auth_ids),
-        }
-        empresas_fmt.append(item)
-        if empresa_login_id and e[0] == empresa_login_id:
-            empresa_para_login = item
+    if auth_ids:
+        placeholders = ",".join(["%s"] * len(auth_ids))
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT id, nome, documento, doc_digits, status, criado_em FROM empresas WHERE id IN ({placeholders}) ORDER BY id DESC;",
+                    tuple(auth_ids),
+                )
+                lista_empresas = cur.fetchall()
+
+        for e in lista_empresas:
+            item = {
+                "id": e[0],
+                "nome": e[1],
+                "documento": e[2] or e[3] or "",
+                "status": e[4],
+                "criado_em": e[5],
+                "autenticada": True,
+                "ativa": empresa_atual_id == e[0],
+            }
+            empresas_fmt.append(item)
+            if empresa_login_id and e[0] == empresa_login_id:
+                empresa_para_login = item
 
     return render_template(
         "empresas.html",
