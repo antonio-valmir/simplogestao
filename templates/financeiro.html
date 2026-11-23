@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% set page_title = "Histórico e Financeiro — SimploGestão" %}
+
+{% block content %}
+<section class="module-hero">
+  <div class="module-hero-text">
+    <span class="module-eyebrow">Caixa e Movimentação</span>
+    <h2>Histórico de Vendas e Financeiro (À Vista)</h2>
+    <p>Acompanhe o faturamento à vista, o resumo por forma de pagamento e o histórico da empresa ativa.</p>
+  </div>
+  <div class="module-hero-badge">
+    <span class="hero-count">R$ {{ "%.2f"|format(resumo.total_avista|float) }}</span>
+    <span class="hero-label">Total à vista</span>
+  </div>
+</section>
+
+<div class="grid-3">
+  <section class="card">
+    <span class="muted">Total vendido à vista</span>
+    <h3>R$ {{ "%.2f"|format(resumo.total_avista|float) }}</h3>
+    <p class="muted">Entradas consolidadas da empresa ativa.</p>
+  </section>
+
+  <section class="card">
+    <span class="muted">Vendas concluídas</span>
+    <h3>{{ resumo.qtd_vendas }}</h3>
+    <p class="muted">Operações à vista registradas.</p>
+  </section>
+
+  <section class="card">
+    <span class="muted">Ticket médio</span>
+    <h3>R$ {{ "%.2f"|format(resumo.ticket_medio|float) }}</h3>
+    <p class="muted">Média por venda à vista.</p>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h3>Resumo por forma de pagamento à vista</h3>
+      <p class="muted">Totais filtrados pela empresa ativa.</p>
+    </div>
+  </div>
+
+  {% if por_pagamento %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Forma de pagamento</th>
+          <th>Qtd. vendas</th>
+          <th>Total recebido</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pg in por_pagamento %}
+        <tr>
+          <td><strong>{{ pg[0] }}</strong></td>
+          <td>{{ pg[1] }}</td>
+          <td>R$ {{ "%.2f"|format(pg[2]|float) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <strong>Nenhuma entrada à vista ainda</strong>
+    <p class="muted">Quando você registrar vendas em /vendas, os totais aparecerão aqui.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h3>Histórico de vendas</h3>
+      <p class="muted">Lançamentos da empresa ativa com isolamento por empresa.</p>
+    </div>
+  </div>
+
+  {% if historico %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Data</th>
+          <th>Cliente</th>
+          <th>Itens</th>
+          <th>Pagamento</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in historico %}
+        <tr>
+          <td><span class="id-pill">#{{ item[0] }}</span></td>
+          <td>{{ item[1].strftime("%d/%m/%Y %H:%M") if item[1] else "-" }}</td>
+          <td><strong>{{ item[2] or "Consumidor final" }}</strong></td>
+          <td>{{ item[3] or "-" }}</td>
+          <td>{{ item[4] }}</td>
+          <td><strong>R$ {{ "%.2f"|format(item[5]|float) }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <strong>Histórico vazio</strong>
+    <p class="muted">Nenhuma venda foi registrada para esta empresa até o momento.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

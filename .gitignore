@@ -5,3 +5,11 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+
+# Backups e arquivos temporarios
+*.bak*
+*.save
+[web
+__pycache__/
+*.pyc
+.env

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Minhas Empresas - SimploGestão{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Minhas Empresas</h1>
+    <p>Cadastre empresas com CPF/CNPJ e senha para abrir a seção isolada de cada uma, ou faça login na empresa desejada.</p>
+  </div>
+  <span class="hero-count">{{ empresas|length }}</span>
+</div>
+
+{% if erro %}
+<div class="alert alert-danger" style="padding:12px 16px;border-radius:8px;background:#fee2e2;color:#991b1b;margin-bottom:16px;">
+  {{ erro }}
+</div>
+{% endif %}
+
+{% if empresa_para_login %}
+<div class="card" style="margin-bottom:20px;border:1px solid #2563eb;">
+  <h3>Entrar na seção: {{ empresa_para_login.nome }}</h3>
+  <p style="margin-bottom:12px;color:#555;">Esta empresa ainda não está autenticada na sua sessão atual. Informe CPF/CNPJ e senha para abrir seus serviços (Clientes, Produtos, Vendas e Financeiro).</p>
+  <form method="post" action="{{ url_for('empresas') }}" class="form-stack">
+    <input type="hidden" name="acao" value="entrar">
+    <input type="hidden" name="empresa_id" value="{{ empresa_para_login.id }}">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="documento_login">CPF ou CNPJ</label>
+        <input type="text" id="documento_login" name="documento_login" placeholder="Digite o CPF ou CNPJ" required>
+      </div>
+      <div class="form-group">
+        <label for="senha_login">Senha da empresa</label>
+        <input type="password" id="senha_login" name="senha_login" placeholder="Digite a senha" required>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Entrar na empresa</button>
+    <a href="{{ url_for('empresas') }}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:24px;">
+  <h3>Cadastrar nova empresa e abrir seção</h3>
+  <form method="post" action="{{ url_for('empresas') }}" class="form-stack">
+    <input type="hidden" name="acao" value="cadastrar">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="nome">Nome da empresa</label>
+        <input type="text" id="nome" name="nome" placeholder="Ex.: Valmir Eletrônica" required>
+      </div>
+      <div class="form-group">
+        <label for="documento">CPF ou CNPJ</label>
+        <input type="text" id="documento" name="documento" placeholder="Ex.: 00.000.000/0001-00" required>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="senha">Senha da empresa</label>
+        <input type="password" id="senha" name="senha" placeholder="Mínimo de 4 caracteres" required>
+      </div>
+      <div class="form-group">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          <option value="Ativa" selected>Ativa</option>
+          <option value="Inativa">Inativa</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Cadastrar e entrar na empresa</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Empresas cadastradas</h3>
+  {% if empresas %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Empresa</th>
+          <th>CPF / CNPJ</th>
+          <th>Status</th>
+          <th>Sessão</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in empresas %}
+        <tr>
+          <td>#{{ emp.id }}</td>
+          <td><strong>{{ emp.nome }}</strong></td>
+          <td>{{ emp.documento }}</td>
+          <td>{{ emp.status }}</td>
+          <td>
+            {% if emp.ativa %}
+              <span class="badge">Seção ativa</span>
+            {% elif emp.autenticada %}
+              <span>Autenticada na sessão</span>
+            {% else %}
+              <span>Bloqueada (pede CPF/CNPJ + senha)</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if emp.ativa %}
+              <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-primary">Abrir painel</a>
+            {% elif emp.autenticada %}
+              <form method="post" action="{{ url_for('empresas') }}" style="display:inline;">
+                <input type="hidden" name="acao" value="ativar_sessao">
+                <input type="hidden" name="empresa_id" value="{{ emp.id }}">
+                <button type="submit" class="btn btn-sm btn-primary">Entrar na seção</button>
+              </form>
+            {% else %}
+              <a href="{{ url_for('empresas', entrar=emp.id) }}" class="btn btn-sm btn-secondary">Logar com CPF/CNPJ e senha</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p>Nenhuma empresa cadastrada ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}

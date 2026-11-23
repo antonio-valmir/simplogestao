@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: simplogestao_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: simplogestao_db
+      POSTGRES_USER: simplogestao_user
+      POSTGRES_PASSWORD: simplogestao_password_123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simplogestao_user -d simplogestao_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    env_file:
+      - .env
+    build: .
+    image: simplogestao-web:1.0
+    container_name: simplogestao_web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      SECRET_KEY: altere-essa-chave-em-producao
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: simplogestao_db
+      DB_USER: simplogestao_user
+      DB_PASSWORD: simplogestao_password_123
+      FLASK_DEBUG: "False"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

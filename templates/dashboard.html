@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — SimploGestão{% endblock %}
+
+{% block content %}
+  {% set k = kpis|default({}) %}
+  {% set f = financeiro_resumo|default({}) %}
+  {% set d = dist|default({'clientes': 60, 'produtos': 25, 'vendas': 15}) %}
+  {% set vendas_recentes = recentes_vendas|default([]) %}
+  {% set estoque_baixo = alertas_estoque|default([]) %}
+  {% set clientes_recentes = recentes_clientes|default([]) %}
+  {% set pontos = serie_mensal|default([
+    {'mes': 'Jan', 'valor': 14000, 'y': 145},
+    {'mes': 'Fev', 'valor': 16200, 'y': 125},
+    {'mes': 'Mar', 'valor': 13800, 'y': 150},
+    {'mes': 'Abr', 'valor': 18900, 'y': 98},
+    {'mes': 'Mai', 'valor': 21400, 'y': 74},
+    {'mes': 'Jun', 'valor': 24850, 'y': 46}
+  ]) %}
+
+  <section class="hero-banner">
+    <div>
+      <span class="hero-badge">● Ambiente Multi-Empresa</span>
+      <h1 class="hero-title">Olá, {{ (usuario_logado.nome if usuario_logado and usuario_logado.nome else 'Gestor') }}!</h1>
+      <p class="hero-subtitle">Acompanhe o desempenho comercial e operacional da sua empresa em tempo real.</p>
+
+      <div class="hero-meta-row">
+        <span class="hero-meta-pill">🏢 {{ empresa_ativa.nome if empresa_ativa and empresa_ativa.nome else 'Empresa Ativa' }}</span>
+        <span class="hero-meta-pill">📅 {{ data_atual or 'Hoje' }}</span>
+        <span class="hero-meta-pill">🛡️ Isolamento ativo por empresa</span>
+      </div>
+
+      <div class="hero-actions">
+        <a href="{{ safe_url('nova_venda', '/vendas') }}" class="btn btn-primary">+ Nova Venda</a>
+        <a href="{{ safe_url('clientes', '/clientes') }}" class="btn btn-white">👥 Novo Cliente</a>
+        <a href="{{ safe_url('produtos', '/produtos') }}" class="btn btn-navy">📦 Novo Produto</a>
+      </div>
+    </div>
+
+    <div class="hero-summary-panel">
+      <div class="hero-summary-header">
+        <span>📈</span>
+        <span>Resumo da Empresa Ativa</span>
+      </div>
+      <div class="hero-mini-grid">
+        <div class="hero-mini-card">
+          <div class="hero-mini-label">Faturamento Mês</div>
+          <div class="hero-mini-value">{{ k.faturamento_mes or 'R$ 0,00' }}</div>
+          <div class="hero-mini-trend">{{ k.tendencia_mes or 'Atualizado' }}</div>
+        </div>
+        <div class="hero-mini-card">
+          <div class="hero-mini-label">Ticket Médio</div>
+          <div class="hero-mini-value">{{ k.ticket_medio or 'R$ 0,00' }}</div>
+          <div class="hero-mini-trend">{{ k.tendencia_ticket or 'Por venda' }}</div>
+        </div>
+        <div class="hero-mini-card">
+          <div class="hero-mini-label">Vendas Hoje</div>
+          <div class="hero-mini-value">{{ k.vendas_hoje or '0' }}</div>
+          <div class="hero-mini-trend">{{ k.valor_hoje or 'R$ 0,00' }}</div>
+        </div>
+        <div class="hero-mini-card">
+          <div class="hero-mini-label">A Receber</div>
+          <div class="hero-mini-value">{{ k.a_receber or 'R$ 0,00' }}</div>
+          <div class="hero-mini-trend">{{ k.qtd_pendentes or 0 }} pendentes</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kpi-grid">
+    <a href="{{ safe_url('clientes', '/clientes') }}" class="kpi-card">
+      <div class="kpi-left">
+        <div class="kpi-icon">👥</div>
+        <div>
+          <div class="kpi-title">Total de Clientes</div>
+          <div class="kpi-value">{{ k.total_clientes or 0 }}</div>
+        </div>
+      </div>
+      <div class="kpi-arrow">›</div>
+    </a>
+
+    <a href="{{ safe_url('produtos', '/produtos') }}" class="kpi-card">
+      <div class="kpi-left">
+        <div class="kpi-icon">📦</div>
+        <div>
+          <div class="kpi-title">Produtos Cadastrados</div>
+          <div class="kpi-value">{{ k.total_produtos or 0 }}</div>
+        </div>
+      </div>
+      <div class="kpi-arrow">›</div>
+    </a>
+
+    <a href="{{ safe_url('vendas', '/vendas') }}" class="kpi-card">
+      <div class="kpi-left">
+        <div class="kpi-icon">🛒</div>
+        <div>
+          <div class="kpi-title">Vendas Realizadas</div>
+          <div class="kpi-value">{{ k.total_vendas or 0 }}</div>
+        </div>
+      </div>
+      <div class="kpi-arrow">›</div>
+    </a>
+
+    <a href="{{ safe_url('financeiro', '/financeiro') }}" class="kpi-card">
+      <div class="kpi-left">
+        <div class="kpi-icon">💰</div>
+        <div>
+          <div class="kpi-title">Receita Total</div>
+          <div class="kpi-value">{{ k.receita_total or 'R$ 0,00' }}</div>
+        </div>
+      </div>
+      <div class="kpi-arrow">›</div>
+    </a>
+  </section>
+
+  <section class="middle-grid">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Evolução das Vendas</h2>
+        <span style="font-size: 12px; color: var(--text-muted);">Últimos 6 meses</span>
+      </div>
+      <div class="chart-wrap">
+        <svg viewBox="0 0 520 190" width="100%" height="185" role="img" aria-label="Gráfico de evolução das vendas">
+          <line x1="42" y1="30" x2="500" y2="30" stroke="#edf2f9" stroke-width="1"/>
+          <line x1="42" y1="70" x2="500" y2="70" stroke="#edf2f9" stroke-width="1"/>
+          <line x1="42" y1="110" x2="500" y2="110" stroke="#edf2f9" stroke-width="1"/>
+          <line x1="42" y1="150" x2="500" y2="150" stroke="#edf2f9" stroke-width="1"/>
+
+          <polyline
+            fill="none"
+            stroke="#1a6ef5"
+            stroke-width="3"
+            points="{% for p in pontos %}{{ 55 + loop.index0 * 84 }},{{ p.y }} {% endfor %}"
+          />
+
+          {% for p in pontos %}
+            {% set cx = 55 + loop.index0 * 84 %}
+            <circle cx="{{ cx }}" cy="{{ p.y }}" r="5" fill="#1a6ef5"/>
+            <text x="{{ cx }}" y="174" text-anchor="middle" font-size="11" fill="#64748b">{{ p.mes }}</text>
+          {% endfor %}
+        </svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Distribuição Operacional</h2>
+        <span style="font-size: 12px; color: var(--text-muted);">Por módulo</span>
+      </div>
+      <div class="donut-row">
+        <div class="donut-ring">
+          <div class="donut-hole">{{ d.total_itens or 100 }}</div>
+        </div>
+        <ul class="legend-list">
+          <li class="legend-item">
+            <span><span class="dot" style="background:#1a6ef5;"></span>Clientes</span>
+            <strong>{{ d.clientes }}%</strong>
+          </li>
+          <li class="legend-item">
+            <span><span class="dot" style="background:#f38b3c;"></span>Produtos</span>
+            <strong>{{ d.produtos }}%</strong>
+          </li>
+          <li class="legend-item">
+            <span><span class="dot" style="background:#82b7ff;"></span>Vendas</span>
+            <strong>{{ d.vendas }}%</strong>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="cta-card">
+      <div>
+        <div class="cta-icon">🛒</div>
+        <h2 class="cta-title">Nova Venda</h2>
+        <p class="cta-desc">Registre uma venda vinculada ao cliente, calcule o total com segurança e atualize o estoque automaticamente.</p>
+      </div>
+      <div style="margin-top: 16px;">
+        <a href="{{ safe_url('nova_venda', '/vendas') }}" class="btn btn-primary" style="width: 100%;">+ Registrar Nova Venda</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="bottom-grid">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Vendas Recentes</h2>
+        <a href="{{ safe_url('vendas', '/vendas') }}" class="card-link">Ver todas</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Valor</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in vendas_recentes %}
+            <tr>
+              <td>{{ v.cliente_nome }}</td>
+              <td>{{ v.valor_formatado }}</td>
+              <td>
+                <span class="badge {{ 'badge-paid' if v.status == 'paga' else 'badge-pending' }}">
+                  {{ 'Paga' if v.status == 'paga' else 'Pendente' }}
+                </span>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px 0;">Nenhuma venda registrada ainda.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Alertas de Estoque Baixo</h2>
+        <a href="{{ safe_url('produtos', '/produtos') }}" class="card-link">Ver estoque</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th>Saldo</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in estoque_baixo %}
+            <tr>
+              <td>{{ p.nome }}</td>
+              <td>{{ p.estoque }} un</td>
+              <td>
+                <span class="badge {{ 'badge-critical' if p.estoque <= 2 else 'badge-low' }}">
+                  {{ 'Crítico' if p.estoque <= 2 else 'Baixo' }}
+                </span>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px 0;">Nenhum produto com estoque crítico.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Clientes Recentes</h2>
+        <a href="{{ safe_url('clientes', '/clientes') }}" class="card-link">Ver todos</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Contato</th>
+            <th>Cadastro</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in clientes_recentes %}
+            <tr>
+              <td><strong>{{ c.nome }}</strong></td>
+              <td>{{ c.telefone or c.email or '-' }}</td>
+              <td>{{ c.criado_em or '-' }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px 0;">Nenhum cliente cadastrado ainda.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

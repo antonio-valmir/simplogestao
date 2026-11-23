@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nova Senha — SimploGestão</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="auth-body">
+  <div class="auth-card">
+    <div class="auth-header">
+      <h1>Criar Nova Senha</h1>
+      {% if usuario_email %}
+        <p>Conta: <strong>{{ usuario_email }}</strong></p>
+      {% else %}
+        <p>Defina sua nova senha de acesso.</p>
+      {% endif %}
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% if token_valido %}
+      <form method="POST" action="{{ url_for('auth.redefinir_senha', token=token) }}" class="auth-form">
+        <div class="form-group">
+          <label for="nova_senha">Nova senha</label>
+          <input type="password" id="nova_senha" name="nova_senha" required minlength="6" autofocus placeholder="Mínimo de 6 caracteres" />
+        </div>
+        <div class="form-group">
+          <label for="confirmar_senha">Confirmar nova senha</label>
+          <input type="password" id="confirmar_senha" name="confirmar_senha" required minlength="6" placeholder="Repita a nova senha" />
+        </div>
+        <button type="submit" class="btn-primary">Salvar nova senha</button>
+      </form>
+    {% endif %}
+    <div class="auth-footer">
+      <a href="{{ url_for('auth.esqueci_senha') }}">Solicitar novo link</a> ·
+      <a href="{{ url_for('auth.login') }}">Ir para o login</a>
+    </div>
+  </div>
+</body>
+</html>

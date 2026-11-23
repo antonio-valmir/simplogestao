@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% set page_title = "Mercadorias — SimploGestão" %}
+
+{% block content %}
+<section class="module-hero">
+  <div class="module-hero-text">
+    <span class="module-eyebrow">Catálogo e Estoque</span>
+    <h2>Cadastro de Mercadorias</h2>
+    <p>Cadastre e consulte as mercadorias da empresa ativa com isolamento por empresa.</p>
+  </div>
+  <div class="module-hero-badge">
+    <span class="hero-count">{{ produtos|length }}</span>
+    <span class="hero-label">Mercadorias</span>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h3>Nova mercadoria</h3>
+        <p class="muted">Informe nome, preço unitário e estoque inicial.</p>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('produtos') }}" class="form-stack">
+      <div class="field">
+        <label for="nome">Nome da mercadoria *</label>
+        <input id="nome" name="nome" type="text" maxlength="120" required placeholder="Ex.: Cabo USB-C 1m">
+      </div>
+
+      <div class="field">
+        <label for="preco">Preço (R$) *</label>
+        <input id="preco" name="preco" type="number" step="0.01" min="0" required placeholder="Ex.: 29.90">
+      </div>
+
+      <div class="field">
+        <label for="estoque">Estoque inicial *</label>
+        <input id="estoque" name="estoque" type="number" step="1" min="0" value="0" required>
+      </div>
+
+      <button type="submit" class="btn-primary">Salvar mercadoria</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h3>Mercadorias cadastradas</h3>
+        <p class="muted">Registros vinculados à empresa ativa.</p>
+      </div>
+    </div>
+
+    {% if produtos %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Mercadoria</th>
+            <th>Preço</th>
+            <th>Estoque</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prod in produtos %}
+          <tr>
+            <td><span class="id-pill">#{{ prod[0] }}</span></td>
+            <td><strong>{{ prod[1] }}</strong></td>
+            <td>R$ {{ "%.2f"|format(prod[2]|float) }}</td>
+            <td>{{ prod[3] }} un</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <strong>Nenhuma mercadoria cadastrada ainda</strong>
+      <p class="muted">Use o formulário ao lado para adicionar o primeiro item ao estoque.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
