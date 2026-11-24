@@ -403,6 +403,9 @@ def produtos():
             nome = request.form.get("nome", "").strip()
             preco_raw = request.form.get("preco", "0").strip().replace(",", ".")
             estoque_raw = request.form.get("estoque", "0").strip()
+            codigo = request.form.get("codigo", "").strip() or None
+            categoria = request.form.get("categoria", "").strip() or None
+            tipo = request.form.get("tipo", "").strip() or None
 
             try:
                 preco = Decimal(preco_raw).quantize(Decimal("0.01"))
@@ -412,22 +415,24 @@ def produtos():
                 estoque = None
 
             if nome and preco is not None and estoque is not None and preco >= Decimal("0.00") and estoque >= 0:
+                garantir_tabelas_base(conn)
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        INSERT INTO produtos (empresa_id, nome, preco, estoque)
-                        VALUES (%s, %s, %s, %s);
+                        INSERT INTO produtos (empresa_id, nome, preco, estoque, codigo, categoria, tipo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
                         """,
-                        (empresa_id, nome, preco, estoque),
+                        (empresa_id, nome, preco, estoque, codigo, categoria, tipo),
                     )
                 conn.commit()
 
             return redirect(url_for("produtos"))
 
+        garantir_tabelas_base(conn)
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, nome, preco, estoque
+                SELECT id, nome, preco, estoque, codigo, categoria, tipo
                 FROM produtos
                 WHERE empresa_id = %s
                 ORDER BY id DESC;
@@ -494,6 +499,9 @@ def garantir_tabelas_base(conn):
         cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE;")
         cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco NUMERIC(12, 2) NOT NULL DEFAULT 0;")
         cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INTEGER NOT NULL DEFAULT 0;")
+        cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS codigo VARCHAR(60);")
+        cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria VARCHAR(100);")
+        cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS tipo VARCHAR(100);")
 
 
 def garantir_estrutura_vendas(conn):

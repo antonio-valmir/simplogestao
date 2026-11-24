@@ -18,7 +18,7 @@
 <div class="grid-2">
   <section class="card">
     <h2>Nova Mercadoria</h2>
-    <p class="muted" style="margin-bottom:14px;">Informe nome, preço unitário e estoque inicial.</p>
+    <p class="muted" style="margin-bottom:14px;">Preencha os campos básicos (*) para salvar rápido ou informe código, categoria e tipo se quiser detalhar.</p>
 
     <form method="post" action="{{ url_for('produtos') }}" class="form-stack">
       <div class="form-group">
@@ -36,6 +36,21 @@
         <input id="estoque" name="estoque" type="number" step="1" min="0" value="0" required>
       </div>
 
+      <div class="form-group">
+        <label for="codigo">Código (opcional)</label>
+        <input id="codigo" name="codigo" type="text" maxlength="60" placeholder="Ex.: PRD-001 ou SKU">
+      </div>
+
+      <div class="form-group">
+        <label for="categoria">Categoria (opcional)</label>
+        <input id="categoria" name="categoria" type="text" maxlength="100" placeholder="Ex.: Acessórios, Peças, Bebidas">
+      </div>
+
+      <div class="form-group">
+        <label for="tipo">Tipo (opcional)</label>
+        <input id="tipo" name="tipo" type="text" maxlength="100" placeholder="Ex.: Cabo, Insumo, Produto Acabado">
+      </div>
+
       <button type="submit" class="btn-primary">Salvar mercadoria</button>
     </form>
   </section>
@@ -51,6 +66,8 @@
           <tr>
             <th>ID</th>
             <th>Mercadoria</th>
+            <th>Código</th>
+            <th>Categoria / Tipo</th>
             <th>Preço</th>
             <th>Estoque</th>
           </tr>
@@ -60,6 +77,14 @@
           <tr>
             <td><span class="id-pill">#{{ prod[0] }}</span></td>
             <td><strong>{{ prod[1] }}</strong></td>
+            <td>{{ prod[4] or '—' }}</td>
+            <td>
+              {% if prod[5] or prod[6] %}
+                {{ prod[5] or '—' }}{% if prod[6] %} <span class="muted">/ {{ prod[6] }}</span>{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
             <td>R$ {{ "%.2f"|format(prod[2]|float) }}</td>
             <td>{{ prod[3] }} un</td>
           </tr>
