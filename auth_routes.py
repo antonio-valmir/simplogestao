@@ -77,7 +77,9 @@ def login():
             session["empresas_sessao"] = ordenadas
             session["empresa_id"] = int(u[4]) if u[4] in empresas_da_conta else ordenadas[-1]
         else:
-            session["empresa_id"] = u[4] or 1
+            session["empresas_autenticadas"] = []
+            session["empresas_sessao"] = []
+            session.pop("empresa_id", None)
         flash("Bem-vindo, {}!".format(u[1]), "success")
         nxt = request.args.get("next") or ""
         return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("index"))
@@ -198,9 +200,13 @@ def cadastro():
                             row = cur.fetchone()
                             novo_id = row[0] if row else None
                             if novo_id is not None:
+                                session.clear()
+                                session.permanent = True
                                 session["usuario_id"] = novo_id
                                 session["usuario_nome"] = nome
                                 session["usuario_email"] = email
+                                session["empresas_autenticadas"] = []
+                                session["empresas_sessao"] = []
                             flash("Conta criada com sucesso!", "success")
                             return redirect(url_for("empresas"))
             except Exception as exc:

@@ -1,15 +1,24 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 import os
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 from dotenv import load_dotenv
-from flask import flash, session, Flask, current_app, redirect, render_template, request, url_for
+from flask import flash, session, Flask, current_app, redirect, render_template, render_template_string, request, url_for
 import psycopg
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-key")
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=180)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+
+@app.before_request
+def _tornar_sessao_permanente():
+    session.permanent = True
 
 
 def get_db_connection():
@@ -22,6 +31,8 @@ def get_db_connection():
     )
 
 
+
+app.config["GET_DB_CONN"] = get_db_connection
 def _somente_digitos(valor):
     return re.sub(r"[^0-9]", "", valor or "")
 
@@ -37,6 +48,85 @@ def _marcar_empresa_autenticada(empresa_id):
     sess_set.add(int(empresa_id))
     session["empresas_sessao"] = sorted(sess_set)
     session["empresa_id"] = int(empresa_id)
+
+# --- VINCULO CONTA PLATAFORMA (USUARIO <-> EMPRESA) ---
+def _garantir_vinculo_usuario_empresas():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS usuario_empresas (
+                    id SERIAL PRIMARY KEY,
+                    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                    empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (usuario_id, empresa_id)
+                );
+                """
+            )
+        conn.commit()
+
+
+def _vincular_empresa_a_conta(empresa_id):
+    usuario_id = session.get("usuario_id")
+    if not usuario_id or not empresa_id:
+        return
+    _garantir_vinculo_usuario_empresas()
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO usuario_empresas (usuario_id, empresa_id)
+                VALUES (%s, %s)
+                ON CONFLICT (usuario_id, empresa_id) DO NOTHING;
+                """,
+                (int(usuario_id), int(empresa_id)),
+            )
+            cur.execute(
+                """
+                UPDATE usuarios
+                SET empresa_id = COALESCE(empresa_id, %s)
+                WHERE id = %s;
+                """,
+                (int(empresa_id), int(usuario_id)),
+            )
+        conn.commit()
+
+
+def _ids_empresas_da_conta():
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        return set()
+    _garantir_vinculo_usuario_empresas()
+    ids = set()
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT empresa_id FROM usuario_empresas WHERE usuario_id = %s;",
+                (int(usuario_id),),
+            )
+            for (eid,) in cur.fetchall():
+                if eid:
+                    ids.add(int(eid))
+            cur.execute(
+                "SELECT empresa_id FROM usuarios WHERE id = %s AND empresa_id IS NOT NULL;",
+                (int(usuario_id),),
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                ids.add(int(row[0]))
+    return ids
+
+
+def _empresas_visiveis_ids():
+    if not session.get("usuario_id"):
+        return set()
+    permitidas = _ids_empresas_da_conta()
+    if not permitidas:
+        return set()
+    autenticadas = _empresas_autenticadas_set()
+    return permitidas & autenticadas if autenticadas else permitidas
+
 
 def _garantir_colunas_empresas():
     with get_db_connection() as conn:
@@ -233,13 +323,94 @@ def vendas():
     return render_template("base.html", active_page="vendas")
 
 
+def _contar_registros_seguro(cur, tabela, empresa_id=None):
+    try:
+        cur.execute("SELECT to_regclass(%s);", (f"public.{tabela}",))
+        existe = cur.fetchone()
+        if not existe or not existe[0]:
+            return None
+        if empresa_id is not None:
+            cur.execute(
+                """
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = %s AND column_name = 'empresa_id'
+                LIMIT 1;
+                """,
+                (tabela,),
+            )
+            tem_emp = cur.fetchone() is not None
+            if tem_emp:
+                cur.execute(f"SELECT COUNT(*) FROM {tabela} WHERE empresa_id = %s;", (int(empresa_id),))
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+        cur.execute(f"SELECT COUNT(*) FROM {tabela};")
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return None
+
+
 @app.route("/dashboard")
 def dashboard():
-    if "index" in app.view_functions:
-        return app.view_functions["index"]()
-    if "/" in [r.rule for r in app.url_map.iter_rules()]:
-        return redirect("/")
-    return render_template("base.html", active_page="dashboard")
+    totais = {
+        "empresas": 0,
+        "clientes": 0,
+        "produtos": None,
+        "vendas": None,
+    }
+    empresa = None
+    try:
+        with get_db_connection() as conn:
+            empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+            with conn.cursor() as cur:
+                emp_cnt = _contar_registros_seguro(cur, "empresas")
+                totais["empresas"] = emp_cnt if emp_cnt is not None else 0
+                emp_id = empresa["id"] if isinstance(empresa, dict) and empresa.get("id") else None
+                cli_cnt = _contar_registros_seguro(cur, "clientes", emp_id)
+                totais["clientes"] = cli_cnt if cli_cnt is not None else 0
+                totais["produtos"] = _contar_registros_seguro(cur, "produtos", emp_id)
+                totais["vendas"] = _contar_registros_seguro(cur, "vendas", emp_id)
+    except Exception as exc:
+        flash(f"Nao foi possivel carregar todos os indicadores: {exc}", "warning")
+
+    nome_empresa = (
+        empresa.get("nome") if isinstance(empresa, dict) and empresa.get("nome") else "Nenhuma empresa ativa"
+    )
+    html_dashboard = """{% extends "base.html" %}
+{% block title %}Dashboard - SimploGestão{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p>Visão geral da empresa ativa e acesso rápido aos módulos do SimploGestão.</p>
+  </div>
+</div>
+
+<div class="card" style="max-width:560px;margin-bottom:16px;">
+  <div class="form-stack">
+    <div class="form-group">
+      <label>Empresa ativa</label>
+      <p style="margin:0;font-weight:600;">{{ nome_empresa|e }}</p>
+    </div>
+
+    <div class="form-group">
+      <label>Resumo operacional</label>
+      <p style="margin:0;">Empresas cadastradas: <strong>{{ totais.empresas }}</strong> &middot; Clientes da empresa: <strong>{{ totais.clientes }}</strong>{% if totais.produtos is not none %} &middot; Produtos: <strong>{{ totais.produtos }}</strong>{% endif %}{% if totais.vendas is not none %} &middot; Vendas: <strong>{{ totais.vendas }}</strong>{% endif %}</p>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+      <a href="{{ safe_url('clientes', '/clientes') }}" class="btn btn-primary">Abrir Clientes</a>
+      <a href="{{ safe_url('empresas', '/empresas') }}" class="btn btn-secondary">Gerenciar Empresas</a>
+    </div>
+  </div>
+</div>
+{% endblock %}"""
+    return render_template_string(
+        html_dashboard,
+        pagina="dashboard",
+        nome_empresa=nome_empresa,
+        totais=totais,
+    )
 
 @app.route("/empresas", methods=["GET", "POST"])
 def empresas():
@@ -247,6 +418,7 @@ def empresas():
     acao = (request.form.get("acao") or "cadastrar").strip().lower()
     erro = None
     empresa_login_id = request.args.get("entrar", type=int)
+    empresa_editar_id = request.args.get("editar", type=int)
 
     if request.method == "POST":
         if acao == "cadastrar":
@@ -282,6 +454,7 @@ def empresas():
                     conn.commit()
                 if not erro:
                     _marcar_empresa_autenticada(nova_id)
+                    _vincular_empresa_a_conta(nova_id)
                     flash(f"Empresa '{nome}' cadastrada e aberta na sua sessao.", "success")
                     return redirect(url_for("dashboard"))
 
@@ -314,6 +487,7 @@ def empresas():
                 erro = "CPF/CNPJ ou senha incorretos para esta empresa."
             else:
                 _marcar_empresa_autenticada(emp_row[0])
+                _vincular_empresa_a_conta(emp_row[0])
                 flash(f"Acesso liberado na empresa '{emp_row[1]}'.", "success")
                 return redirect(url_for("dashboard"))
 
@@ -326,10 +500,126 @@ def empresas():
             empresa_login_id = emp_id_form
             erro = "Informe CPF/CNPJ e senha para entrar nesta empresa."
 
-    auth_ids = _empresas_autenticadas_set()
+        elif acao == "editar":
+            emp_id_form = request.form.get("empresa_id", type=int)
+            nome = (request.form.get("nome") or "").strip()
+            documento = (request.form.get("documento") or "").strip()
+            status = (request.form.get("status") or "Ativa").strip()
+            nova_senha = request.form.get("senha") or ""
+            doc_digits = _somente_digitos(documento)
+            empresa_editar_id = emp_id_form
+
+            if not emp_id_form:
+                erro = "Empresa invalida para edicao."
+            elif not nome:
+                erro = "Informe o nome da empresa."
+            elif len(doc_digits) not in (11, 14):
+                erro = "Informe um CPF (11 digitos) ou CNPJ (14 digitos) valido."
+            elif nova_senha and len(nova_senha) < 4:
+                erro = "A nova senha da empresa deve ter pelo menos 4 caracteres."
+            else:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT id FROM empresas WHERE id = %s;", (emp_id_form,))
+                        if not cur.fetchone():
+                            erro = "Empresa nao encontrada."
+                        else:
+                            cur.execute(
+                                "SELECT id FROM empresas WHERE doc_digits = %s AND id <> %s;",
+                                (doc_digits, emp_id_form),
+                            )
+                            if cur.fetchone():
+                                erro = "Ja existe outra empresa cadastrada com esse CPF/CNPJ."
+                            else:
+                                if nova_senha:
+                                    senha_hash = generate_password_hash(nova_senha)
+                                    cur.execute(
+                                        """
+                                        UPDATE empresas
+                                           SET nome = %s,
+                                               documento = %s,
+                                               doc_digits = %s,
+                                               status = %s,
+                                               senha_hash = %s
+                                         WHERE id = %s;
+                                        """,
+                                        (nome, documento, doc_digits, status, senha_hash, emp_id_form),
+                                    )
+                                else:
+                                    cur.execute(
+                                        """
+                                        UPDATE empresas
+                                           SET nome = %s,
+                                               documento = %s,
+                                               doc_digits = %s,
+                                               status = %s
+                                         WHERE id = %s;
+                                        """,
+                                        (nome, documento, doc_digits, status, emp_id_form),
+                                    )
+                    if not erro:
+                        conn.commit()
+                if not erro:
+                    flash(f"Empresa '{nome}' atualizada com sucesso.", "success")
+                    return redirect(url_for("empresas"))
+
+        elif acao == "excluir":
+            emp_id_form = request.form.get("empresa_id", type=int)
+            if not emp_id_form:
+                erro = "Empresa invalida para exclusao."
+            else:
+                try:
+                    with get_db_connection() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT nome FROM empresas WHERE id = %s;", (emp_id_form,))
+                            row_emp = cur.fetchone()
+                            if not row_emp:
+                                erro = "Empresa nao encontrada."
+                            else:
+                                nome_excluida = row_emp[0]
+                                for tbl_check in ("clientes", "produtos", "vendas", "financeiro", "usuario_empresas", "conta_empresas"):
+                                    cur.execute("SELECT to_regclass(%s);", (f"public.{tbl_check}",))
+                                    reg = cur.fetchone()
+                                    if reg and reg[0]:
+                                        cur.execute(
+                                            """
+                                            SELECT 1 FROM information_schema.columns
+                                            WHERE table_schema = 'public' AND table_name = %s AND column_name = 'empresa_id'
+                                            LIMIT 1;
+                                            """,
+                                            (tbl_check,),
+                                        )
+                                        if cur.fetchone():
+                                            cur.execute(f"DELETE FROM {tbl_check} WHERE empresa_id = %s;", (emp_id_form,))
+                                cur.execute("DELETE FROM empresas WHERE id = %s;", (emp_id_form,))
+                        if not erro:
+                            conn.commit()
+                except Exception as exc:
+                    erro = f"Nao foi possivel excluir a empresa: {exc}"
+
+                if not erro:
+                    auth_set = set(_empresas_autenticadas_set())
+                    auth_set.discard(emp_id_form)
+                    session["empresas_autenticadas"] = sorted(auth_set)
+
+                    sess_set = set(session.get("empresas_sessao", []))
+                    sess_set.discard(emp_id_form)
+                    session["empresas_sessao"] = sorted(sess_set)
+
+                    if session.get("empresa_id") == emp_id_form:
+                        if auth_set:
+                            session["empresa_id"] = sorted(auth_set)[0]
+                        else:
+                            session.pop("empresa_id", None)
+
+                    flash(f"Empresa '{nome_excluida}' excluida com sucesso.", "success")
+                    return redirect(url_for("empresas"))
+
+    auth_ids = _empresas_visiveis_ids()
     empresa_atual_id = session.get("empresa_id")
     empresas_fmt = []
     empresa_para_login = None
+    empresa_para_editar = None
 
     if auth_ids:
         placeholders = ",".join(["%s"] * len(auth_ids))
@@ -354,6 +644,8 @@ def empresas():
             empresas_fmt.append(item)
             if empresa_login_id and e[0] == empresa_login_id:
                 empresa_para_login = item
+            if empresa_editar_id and e[0] == empresa_editar_id:
+                empresa_para_editar = item
 
     return render_template(
         "empresas.html",
@@ -361,7 +653,15 @@ def empresas():
         empresas=empresas_fmt,
         erro=erro,
         empresa_para_login=empresa_para_login,
+        empresa_para_editar=empresa_para_editar,
     )
+
+
+try:
+    from auth_routes import auth_bp
+    app.register_blueprint(auth_bp)
+except Exception as _auth_err:
+    app.logger.warning("Nao foi possivel registrar auth_bp: %s", _auth_err)
 
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")
