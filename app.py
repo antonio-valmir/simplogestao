@@ -210,49 +210,158 @@ def clientes():
             flash("Selecione ou cadastre uma empresa antes de acessar esta area.", "warning")
             return redirect(url_for("empresas"))
         empresa_id = empresa[0]
+        acao = (request.form.get("acao") or "cadastrar").strip().lower()
+        cliente_editar_id = request.args.get("editar", type=int)
 
         if request.method == "POST":
-            nome = (request.form.get("nome") or "").strip()
-            cpf = (request.form.get("cpf") or "").strip() or None
-            cpf_digits = _somente_digitos(cpf) if cpf else None
-            telefone = (request.form.get("telefone") or "").strip() or None
-            email = (request.form.get("email") or "").strip() or None
-            cep = (request.form.get("cep") or "").strip() or None
-            endereco = (request.form.get("endereco") or "").strip() or None
+            if acao == "editar":
+                cli_id = request.form.get("cliente_id", type=int)
+                nome = (request.form.get("nome") or "").strip()
+                cpf = (request.form.get("cpf") or "").strip() or None
+                cpf_digits = _somente_digitos(cpf) if cpf else None
+                telefone = (request.form.get("telefone") or "").strip() or None
+                email = (request.form.get("email") or "").strip() or None
+                cep = (request.form.get("cep") or "").strip() or None
+                endereco = (request.form.get("endereco") or "").strip() or None
 
-            if not nome:
-                flash("Informe o nome completo do cliente.", "warning")
-            elif cpf_digits and len(cpf_digits) != 11:
-                flash("Informe um CPF valido com 11 digitos.", "warning")
-            else:
-                duplicado = False
-                if cpf_digits:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            SELECT id FROM clientes
-                            WHERE empresa_id = %s AND cpf_digits = %s;
-                            """,
-                            (empresa_id, cpf_digits),
-                        )
-                        if cur.fetchone():
-                            duplicado = True
-
-                if duplicado:
-                    flash("Ja existe um cliente com este CPF nesta empresa.", "warning")
+                if not cli_id:
+                    flash("Cliente invalido para edicao.", "warning")
+                elif not nome:
+                    flash("Informe o nome completo do cliente.", "warning")
+                    return redirect(url_for("clientes", editar=cli_id))
+                elif cpf_digits and len(cpf_digits) != 11:
+                    flash("Informe um CPF valido com 11 digitos.", "warning")
+                    return redirect(url_for("clientes", editar=cli_id))
                 else:
+                    duplicado = False
+                    if cpf_digits:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                SELECT id FROM clientes
+                                WHERE empresa_id = %s AND cpf_digits = %s AND id <> %s;
+                                """,
+                                (empresa_id, cpf_digits, cli_id),
+                            )
+                            if cur.fetchone():
+                                duplicado = True
+                    if duplicado:
+                        flash("Ja existe outro cliente com este CPF nesta empresa.", "warning")
+                        return redirect(url_for("clientes", editar=cli_id))
+
                     with conn.cursor() as cur:
                         cur.execute(
                             """
-                            INSERT INTO clientes (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                            UPDATE clientes
+                               SET nome = %s,
+                                   cpf = %s,
+                                   cpf_digits = %s,
+                                   telefone = %s,
+                                   email = %s,
+                                   cep = %s,
+                                   endereco = %s
+                             WHERE id = %s AND empresa_id = %s;
                             """,
-                            (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco),
+                            (nome, cpf, cpf_digits, telefone, email, cep, endereco, cli_id, empresa_id),
                         )
+                        atualizado = cur.rowcount
                     conn.commit()
-                    flash("Cliente cadastrado com sucesso.", "success")
+                    if atualizado:
+                        flash("Cliente atualizado com sucesso.", "success")
+                    else:
+                        flash("Cliente nao encontrado nesta empresa.", "warning")
+                return redirect(url_for("clientes"))
 
-            return redirect(url_for("clientes"))
+            elif acao == "excluir":
+                cli_id = request.form.get("cliente_id", type=int)
+                if not cli_id:
+                    flash("Cliente invalido para exclusao.", "warning")
+                else:
+                    try:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "SELECT nome FROM clientes WHERE id = %s AND empresa_id = %s;",
+                                (cli_id, empresa_id),
+                            )
+                            row_cli = cur.fetchone()
+                            if not row_cli:
+                                flash("Cliente nao encontrado nesta empresa.", "warning")
+                            else:
+                                nome_cli = row_cli[0]
+                                tem_vendas = False
+                                cur.execute("SELECT to_regclass('public.vendas');")
+                                reg_v = cur.fetchone()
+                                if reg_v and reg_v[0]:
+                                    cur.execute(
+                                        """
+                                        SELECT 1 FROM information_schema.columns
+                                        WHERE table_schema = 'public' AND table_name = 'vendas' AND column_name = 'cliente_id'
+                                        LIMIT 1;
+                                        """
+                                    )
+                                    if cur.fetchone():
+                                        cur.execute(
+                                            "SELECT 1 FROM vendas WHERE cliente_id = %s AND empresa_id = %s LIMIT 1;",
+                                            (cli_id, empresa_id),
+                                        )
+                                        if cur.fetchone():
+                                            tem_vendas = True
+                                if tem_vendas:
+                                    flash("Nao e possivel excluir: este cliente possui vendas registradas.", "warning")
+                                else:
+                                    cur.execute(
+                                        "DELETE FROM clientes WHERE id = %s AND empresa_id = %s;",
+                                        (cli_id, empresa_id),
+                                    )
+                                    conn.commit()
+                                    flash(f"Cliente '{nome_cli}' excluido com sucesso.", "success")
+                    except Exception as exc:
+                        conn.rollback()
+                        flash(f"Nao foi possivel excluir o cliente: {exc}", "danger")
+                return redirect(url_for("clientes"))
+
+            else:
+                nome = (request.form.get("nome") or "").strip()
+                cpf = (request.form.get("cpf") or "").strip() or None
+                cpf_digits = _somente_digitos(cpf) if cpf else None
+                telefone = (request.form.get("telefone") or "").strip() or None
+                email = (request.form.get("email") or "").strip() or None
+                cep = (request.form.get("cep") or "").strip() or None
+                endereco = (request.form.get("endereco") or "").strip() or None
+
+                if not nome:
+                    flash("Informe o nome completo do cliente.", "warning")
+                elif cpf_digits and len(cpf_digits) != 11:
+                    flash("Informe um CPF valido com 11 digitos.", "warning")
+                else:
+                    duplicado = False
+                    if cpf_digits:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                SELECT id FROM clientes
+                                WHERE empresa_id = %s AND cpf_digits = %s;
+                                """,
+                                (empresa_id, cpf_digits),
+                            )
+                            if cur.fetchone():
+                                duplicado = True
+
+                    if duplicado:
+                        flash("Ja existe um cliente com este CPF nesta empresa.", "warning")
+                    else:
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                INSERT INTO clientes (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                                """,
+                                (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco),
+                            )
+                        conn.commit()
+                        flash("Cliente cadastrado com sucesso.", "success")
+
+                return redirect(url_for("clientes"))
 
         with conn.cursor() as cur:
             cur.execute(
@@ -266,7 +375,19 @@ def clientes():
             )
             lista_clientes = cur.fetchall()
 
-    return render_template("clientes.html", clientes=lista_clientes, active_page="clientes")
+        cliente_para_editar = None
+        if cliente_editar_id:
+            for c in lista_clientes:
+                if c[0] == cliente_editar_id:
+                    cliente_para_editar = c
+                    break
+
+    return render_template(
+        "clientes.html",
+        clientes=lista_clientes,
+        cliente_para_editar=cliente_para_editar,
+        active_page="clientes",
+    )
 
 
 @app.route("/produtos", methods=["GET", "POST"])
@@ -412,51 +533,62 @@ def dashboard():
         totais=totais,
     )
 
+@app.route("/empresas/cadastrar", methods=["GET", "POST"])
+def cadastrar_empresa():
+    _garantir_colunas_empresas()
+    erro = None
+
+    if request.method == "POST":
+        nome = (request.form.get("nome") or "").strip()
+        documento = (request.form.get("documento") or "").strip()
+        senha = request.form.get("senha") or ""
+        status = (request.form.get("status") or "Ativa").strip()
+        doc_digits = _somente_digitos(documento)
+
+        if not nome:
+            erro = "Informe o nome da empresa."
+        elif len(doc_digits) not in (11, 14):
+            erro = "Informe um CPF (11 digitos) ou CNPJ (14 digitos) valido."
+        elif len(senha) < 4:
+            erro = "A senha da empresa deve ter pelo menos 4 caracteres."
+        else:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM empresas WHERE doc_digits = %s;", (doc_digits,))
+                    if cur.fetchone():
+                        erro = "Ja existe uma empresa cadastrada com esse CPF/CNPJ."
+                    else:
+                        senha_hash = generate_password_hash(senha)
+                        cur.execute(
+                            """
+                            INSERT INTO empresas (nome, documento, doc_digits, senha_hash, status)
+                            VALUES (%s, %s, %s, %s, %s)
+                            RETURNING id;
+                            """,
+                            (nome, documento, doc_digits, senha_hash, status),
+                        )
+                        nova_id = cur.fetchone()[0]
+                conn.commit()
+            if not erro:
+                _marcar_empresa_autenticada(nova_id)
+                _vincular_empresa_a_conta(nova_id)
+                flash(f"Empresa '{nome}' cadastrada e aberta na sua sessao.", "success")
+                return redirect(url_for("dashboard"))
+
+    return render_template("cadastrar_empresa.html", erro=erro, active_page="cadastrar_empresa")
+
+
 @app.route("/empresas", methods=["GET", "POST"])
 def empresas():
     _garantir_colunas_empresas()
-    acao = (request.form.get("acao") or "cadastrar").strip().lower()
+    acao = (request.form.get("acao") or "entrar").strip().lower()
     erro = None
     empresa_login_id = request.args.get("entrar", type=int)
     empresa_editar_id = request.args.get("editar", type=int)
 
     if request.method == "POST":
         if acao == "cadastrar":
-            nome = (request.form.get("nome") or "").strip()
-            documento = (request.form.get("documento") or "").strip()
-            senha = request.form.get("senha") or ""
-            status = (request.form.get("status") or "Ativa").strip()
-            doc_digits = _somente_digitos(documento)
-
-            if not nome:
-                erro = "Informe o nome da empresa."
-            elif len(doc_digits) not in (11, 14):
-                erro = "Informe um CPF (11 digitos) ou CNPJ (14 digitos) valido."
-            elif len(senha) < 4:
-                erro = "A senha da empresa deve ter pelo menos 4 caracteres."
-            else:
-                with get_db_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT id FROM empresas WHERE doc_digits = %s;", (doc_digits,))
-                        if cur.fetchone():
-                            erro = "Ja existe uma empresa cadastrada com esse CPF/CNPJ."
-                        else:
-                            senha_hash = generate_password_hash(senha)
-                            cur.execute(
-                                """
-                                INSERT INTO empresas (nome, documento, doc_digits, senha_hash, status)
-                                VALUES (%s, %s, %s, %s, %s)
-                                RETURNING id;
-                                """,
-                                (nome, documento, doc_digits, senha_hash, status),
-                            )
-                            nova_id = cur.fetchone()[0]
-                    conn.commit()
-                if not erro:
-                    _marcar_empresa_autenticada(nova_id)
-                    _vincular_empresa_a_conta(nova_id)
-                    flash(f"Empresa '{nome}' cadastrada e aberta na sua sessao.", "success")
-                    return redirect(url_for("dashboard"))
+            return redirect(url_for("cadastrar_empresa"))
 
         elif acao == "entrar":
             emp_id_form = request.form.get("empresa_id", type=int)

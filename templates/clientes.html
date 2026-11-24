@@ -7,7 +7,7 @@
   <div>
     <span class="module-hero-tag">SimploGestão • Clientes</span>
     <h1>Gestão de Clientes</h1>
-    <p>Cadastre e consulte os clientes vinculados à empresa ativa.</p>
+    <p>Cadastre, edite e consulte os clientes vinculados à empresa ativa.</p>
   </div>
   <div class="hero-stat-pill">
     <div class="hero-stat-label">Clientes Cadastrados</div>
@@ -15,10 +15,49 @@
   </div>
 </section>
 
+{% if cliente_para_editar %}
+<section class="card" style="margin-bottom:20px;">
+  <h2>Editar Cliente — {{ cliente_para_editar[1] }}</h2>
+  <form method="POST" action="{{ url_for('clientes') }}">
+    <input type="hidden" name="acao" value="editar">
+    <input type="hidden" name="cliente_id" value="{{ cliente_para_editar[0] }}">
+    <div class="form-group">
+      <label for="edit_nome">Nome Completo *</label>
+      <input type="text" id="edit_nome" name="nome" value="{{ cliente_para_editar[1] }}" required>
+    </div>
+    <div class="form-group">
+      <label for="edit_cpf">CPF</label>
+      <input type="text" id="edit_cpf" name="cpf" value="{{ cliente_para_editar[2] or '' }}" placeholder="Ex.: 000.000.000-00">
+    </div>
+    <div class="form-group">
+      <label for="edit_telefone">Telefone</label>
+      <input type="text" id="edit_telefone" name="telefone" value="{{ cliente_para_editar[3] or '' }}" placeholder="Ex.: (86) 99999-8888">
+    </div>
+    <div class="form-group">
+      <label for="edit_email">E-mail</label>
+      <input type="email" id="edit_email" name="email" value="{{ cliente_para_editar[4] or '' }}" placeholder="Ex.: carlos@email.com">
+    </div>
+    <div class="form-group">
+      <label for="edit_cep">CEP</label>
+      <input type="text" id="edit_cep" name="cep" value="{{ cliente_para_editar[5] or '' }}" placeholder="Ex.: 64000-000">
+    </div>
+    <div class="form-group">
+      <label for="edit_endereco">Endereço</label>
+      <input type="text" id="edit_endereco" name="endereco" value="{{ cliente_para_editar[6] or '' }}" placeholder="Rua, número, bairro, cidade/UF">
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button type="submit" class="btn-primary">Salvar</button>
+      <a href="{{ url_for('clientes') }}" class="btn-primary" style="text-decoration:none;opacity:0.85;">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endif %}
+
 <div class="grid-2">
   <section class="card">
     <h2>Novo Cliente</h2>
-    <form method="POST" action="/clientes">
+    <form method="POST" action="{{ url_for('clientes') }}">
+      <input type="hidden" name="acao" value="cadastrar">
       <div class="form-group">
         <label for="nome">Nome Completo *</label>
         <input type="text" id="nome" name="nome" required placeholder="Ex.: Carlos Silva">
@@ -58,6 +97,7 @@
             <th>CPF</th>
             <th>Contato</th>
             <th>Endereço / CEP</th>
+            <th style="width:170px;">Ações</th>
           </tr>
         </thead>
         <tbody>
@@ -74,10 +114,20 @@
               <div>{{ c[6] or "-" }}</div>
               {% if c[5] %}<small style="color: var(--text-muted);">CEP: {{ c[5] }}</small>{% endif %}
             </td>
+            <td>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:nowrap;">
+                <a href="{{ url_for('clientes', editar=c[0]) }}" class="btn-primary" style="padding:6px 12px;font-size:13px;text-decoration:none;white-space:nowrap;">Editar</a>
+                <form method="POST" action="{{ url_for('clientes') }}" style="display:inline;margin:0;" onsubmit="return confirm('Tem certeza que deseja excluir o cliente {{ c[1] }}?');">
+                  <input type="hidden" name="acao" value="excluir">
+                  <input type="hidden" name="cliente_id" value="{{ c[0] }}">
+                  <button type="submit" class="btn-primary" style="padding:6px 12px;font-size:13px;white-space:nowrap;">Excluir</button>
+                </form>
+              </div>
+            </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">
               Nenhum cliente cadastrado ainda.
             </td>
           </tr>

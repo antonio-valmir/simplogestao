@@ -4,9 +4,12 @@
 <div class="page-header">
   <div>
     <h1>Minhas Empresas</h1>
-    <p>Cadastre empresas com CPF/CNPJ e senha para abrir a seção isolada de cada uma, ou faça login na empresa desejada.</p>
+    <p>Lista de empresas cadastradas. Acesse a seção isolada, edite ou exclua conforme necessário.</p>
   </div>
-  <span class="hero-count">{{ empresas|length }}</span>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <a href="{{ url_for('cadastrar_empresa') }}" class="btn-primary" style="text-decoration:none;">Cadastrar Empresa</a>
+    <span class="hero-count">{{ empresas|length }}</span>
+  </div>
 </div>
 
 {% if erro %}
@@ -32,14 +35,13 @@
         <input type="password" id="senha_login" name="senha_login" placeholder="Digite a senha" required>
       </div>
     </div>
-    <button type="submit" class="btn btn-primary">Entrar na empresa</button>
-    <a href="{{ url_for('empresas') }}" class="btn btn-secondary">Cancelar</a>
+    <button type="submit" class="btn-primary">Entrar na empresa</button>
+    <a href="{{ url_for('empresas') }}" class="btn-primary" style="text-decoration:none;opacity:0.85;">Cancelar</a>
   </form>
 </div>
 {% endif %}
 
-{% if not empresa_para_login %}
-{% if empresa_para_editar %}
+{% if not empresa_para_login and empresa_para_editar %}
 <section class="card" style="margin-bottom:20px;">
   <h2>Editar Empresa — {{ empresa_para_editar.nome }}</h2>
   <form method="post" action="{{ url_for('empresas') }}">
@@ -71,57 +73,6 @@
   </form>
 </section>
 {% endif %}
-
-<div class="card" style="margin-bottom:24px;">
-  <h3>Entrar em empresa já cadastrada</h3>
-  <p style="margin-bottom:12px;color:#555;">Se você já cadastrou uma empresa em outro aparelho ou sessão, informe o CPF/CNPJ e a senha dela para abrir nesta sessão.</p>
-  <form method="post" action="{{ url_for('empresas') }}" class="form-stack">
-    <input type="hidden" name="acao" value="entrar">
-    <div class="form-row">
-      <div class="form-group">
-        <label for="documento_login_direto">CPF ou CNPJ</label>
-        <input type="text" id="documento_login_direto" name="documento_login" placeholder="Digite o CPF ou CNPJ" required>
-      </div>
-      <div class="form-group">
-        <label for="senha_login_direto">Senha da empresa</label>
-        <input type="password" id="senha_login_direto" name="senha_login" placeholder="Digite a senha" required>
-      </div>
-    </div>
-    <button type="submit" class="btn btn-secondary">Entrar na empresa</button>
-  </form>
-</div>
-{% endif %}
-
-<div class="card" style="margin-bottom:24px;">
-  <h3>Cadastrar nova empresa e abrir seção</h3>
-  <form method="post" action="{{ url_for('empresas') }}" class="form-stack">
-    <input type="hidden" name="acao" value="cadastrar">
-    <div class="form-row">
-      <div class="form-group">
-        <label for="nome">Nome da empresa</label>
-        <input type="text" id="nome" name="nome" placeholder="Ex.: Valmir Eletrônica" required>
-      </div>
-      <div class="form-group">
-        <label for="documento">CPF ou CNPJ</label>
-        <input type="text" id="documento" name="documento" placeholder="Ex.: 00.000.000/0001-00" required>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label for="senha">Senha da empresa</label>
-        <input type="password" id="senha" name="senha" placeholder="Mínimo de 4 caracteres" required>
-      </div>
-      <div class="form-group">
-        <label for="status">Status</label>
-        <select id="status" name="status">
-          <option value="Ativa" selected>Ativa</option>
-          <option value="Inativa">Inativa</option>
-        </select>
-      </div>
-    </div>
-    <button type="submit" class="btn btn-primary">Cadastrar e entrar na empresa</button>
-  </form>
-</div>
 
 <div class="card">
   <h3>Empresas cadastradas</h3>

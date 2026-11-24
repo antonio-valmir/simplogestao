@@ -80,11 +80,21 @@
             </a>
           </li>
           <li>
+            <a href="{{ safe_url('cadastrar_empresa', '/empresas/cadastrar') }}" class="nav-link {{ 'active' if pagina == 'cadastrar_empresa' else '' }}">
+              <span class="nav-link-left"><span>🏢</span><span>Cadastrar Empresa</span></span>
+            </a>
+          </li>
+          <li>
             <a href="{{ url_for('auth.login') }}" class="nav-link {{ 'active' if pagina == 'login' else '' }}">
               <span class="nav-link-left"><span>🔑</span><span>Entrar</span></span>
             </a>
           </li>
           {% if session.get('usuario_id') %}
+          <li>
+            <a href="{{ url_for('auth.excluir_conta') }}" class="nav-link {{ 'active' if pagina == 'excluir_conta' else '' }}">
+              <span class="nav-link-left"><span>🗑️</span><span>Excluir Conta</span></span>
+            </a>
+          </li>
           <li>
             <a href="{{ url_for('auth.logout') }}" class="nav-link">
               <span class="nav-link-left"><span>🚪</span><span>Sair</span></span>

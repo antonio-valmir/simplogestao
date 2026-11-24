@@ -269,3 +269,100 @@ def cadastro():
         cpf_pre=cpf_pre,
         email_pre=email_pre,
     )
+
+@auth_bp.route("/excluir-conta", methods=["GET", "POST"])
+def excluir_conta():
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        flash("Faca login para acessar a exclusao de conta.", "warning")
+        return redirect(url_for("auth.login"))
+
+    conn = current_app.config["GET_DB_CONN"]()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, nome, email, senha_hash FROM usuarios WHERE id = %s LIMIT 1;",
+                (int(usuario_id),),
+            )
+            usuario = cur.fetchone()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if not usuario:
+        session.clear()
+        flash("Conta nao encontrada.", "warning")
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        senha_atual = request.form.get("senha_atual") or ""
+        confirmacao = (request.form.get("confirmacao") or "").strip().upper()
+
+        if not check_password_hash(usuario[3] or "", senha_atual):
+            flash("Senha atual incorreta.", "danger")
+        elif confirmacao != "EXCLUIR":
+            flash("Digite EXCLUIR para confirmar a remocao permanente da conta.", "danger")
+        else:
+            conn = current_app.config["GET_DB_CONN"]()
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT to_regclass('public.usuario_empresas');")
+                        reg_ue = cur.fetchone()
+                        if reg_ue and reg_ue[0]:
+                            cur.execute("DELETE FROM usuario_empresas WHERE usuario_id = %s;", (int(usuario_id),))
+                        cur.execute("DELETE FROM usuarios WHERE id = %s;", (int(usuario_id),))
+                session.clear()
+                flash("Sua conta foi excluida permanentemente.", "success")
+                return redirect(url_for("auth.login"))
+            except Exception as exc:
+                flash(f"Erro ao excluir conta: {exc}", "danger")
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    html = """{% extends "base.html" %}
+{% block title %}Excluir Conta - SimploGestão{% endblock %}
+{% block content %}
+<section class="module-hero">
+  <div>
+    <span class="module-hero-tag">SimploGestão • Conta</span>
+    <h1>Excluir Conta</h1>
+    <p>Remova permanentemente o seu acesso de usuário do SimploGestão.</p>
+  </div>
+</section>
+
+<div class="card" style="max-width:560px;">
+  <h2>Confirmar Exclusão Permanente</h2>
+  <p style="margin-bottom:14px;color:var(--text-muted);">
+    Usuário: <strong>{{ usuario_nome|e }}</strong> ({{ usuario_email|e }}). Esta ação remove sua conta e desvincula suas empresas deste acesso.
+  </p>
+  <form method="post" action="{{ url_for('auth.excluir_conta') }}" onsubmit="return confirm('Confirma a exclusao permanente da sua conta?');">
+    <div class="form-group">
+      <label for="senha_atual">Senha atual *</label>
+      <input id="senha_atual" type="password" name="senha_atual" placeholder="Digite sua senha atual" required>
+    </div>
+
+    <div class="form-group">
+      <label for="confirmacao">Digite EXCLUIR para confirmar *</label>
+      <input id="confirmacao" type="text" name="confirmacao" placeholder="EXCLUIR" required>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+      <button type="submit" class="btn-primary">Excluir Minha Conta</button>
+      <a href="{{ url_for('empresas') }}" class="btn-primary" style="text-decoration:none;opacity:0.85;">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}"""
+
+    return render_template_string(
+        html,
+        active_page="excluir_conta",
+        usuario_nome=usuario[1],
+        usuario_email=usuario[2],
+    )
