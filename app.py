@@ -779,66 +779,291 @@ def vendas():
 
 @app.route("/dashboard")
 def dashboard():
-    totais = {
-        "empresas": 0,
-        "clientes": 0,
-        "produtos": None,
-        "vendas": None,
-    }
+    from datetime import date, datetime
+
+    def _fmt_brl(valor):
+        try:
+            q = Decimal(str(valor or "0.00")).quantize(Decimal("0.01"))
+        except Exception:
+            q = Decimal("0.00")
+        s = f"{q:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {s}"
+
+    hoje = date.today()
+    meses_pt = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+
     empresa = None
+    empresa_id = None
+    usuario_logado = session.get("usuario") or session.get("user") or None
+
+    kpis = {
+        "faturamento_mes": "R$ 0,00",
+        "tendencia_mes": "Mês atual",
+        "ticket_medio": "R$ 0,00",
+        "tendencia_ticket": "Por venda",
+        "vendas_hoje": 0,
+        "valor_hoje": "R$ 0,00",
+        "a_receber": "R$ 0,00",
+        "qtd_pendentes": 0,
+        "total_clientes": 0,
+        "total_produtos": 0,
+        "total_vendas": 0,
+        "receita_total": "R$ 0,00",
+    }
+    dist = {"clientes": 0, "produtos": 0, "vendas": 0, "total_itens": 0}
+    vendas_recentes = []
+    alertas_estoque = []
+    recentes_clientes = []
+    serie_mensal = []
+
     try:
         with get_db_connection() as conn:
+            garantir_tabelas_base(conn)
+            garantir_estrutura_vendas(conn)
+            try:
+                garantir_tabelas_compras_financeiro(conn)
+            except Exception:
+                conn.rollback()
+
             empresa = get_empresa_ativa(conn, session.get("empresa_id"))
-            with conn.cursor() as cur:
-                emp_cnt = _contar_registros_seguro(cur, "empresas")
-                totais["empresas"] = emp_cnt if emp_cnt is not None else 0
-                emp_id = empresa["id"] if isinstance(empresa, dict) and empresa.get("id") else None
-                cli_cnt = _contar_registros_seguro(cur, "clientes", emp_id)
-                totais["clientes"] = cli_cnt if cli_cnt is not None else 0
-                totais["produtos"] = _contar_registros_seguro(cur, "produtos", emp_id)
-                totais["vendas"] = _contar_registros_seguro(cur, "vendas", emp_id)
+            empresa_id = _empresa_id_seguro(empresa)
+
+            if empresa_id:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM clientes WHERE empresa_id = %s;", (empresa_id,))
+                    total_cli = int(cur.fetchone()[0] or 0)
+
+                    cur.execute("SELECT COUNT(*) FROM produtos WHERE empresa_id = %s;", (empresa_id,))
+                    total_prod = int(cur.fetchone()[0] or 0)
+
+                    cur.execute(
+                        "SELECT COUNT(*), COALESCE(SUM(total), 0) FROM vendas WHERE empresa_id = %s;",
+                        (empresa_id,),
+                    )
+                    row_v = cur.fetchone()
+                    total_vendas = int(row_v[0] or 0)
+                    receita_total_dec = Decimal(str(row_v[1] or "0.00"))
+
+                    ticket_dec = (
+                        (receita_total_dec / Decimal(total_vendas)).quantize(Decimal("0.01"))
+                        if total_vendas > 0
+                        else Decimal("0.00")
+                    )
+
+                    cur.execute(
+                        """
+                        SELECT COUNT(*), COALESCE(SUM(total), 0)
+                        FROM vendas
+                        WHERE empresa_id = %s
+                          AND criado_em::date = CURRENT_DATE;
+                        """,
+                        (empresa_id,),
+                    )
+                    row_hoje = cur.fetchone()
+                    vendas_hoje = int(row_hoje[0] or 0)
+                    valor_hoje_dec = Decimal(str(row_hoje[1] or "0.00"))
+
+                    cur.execute(
+                        """
+                        SELECT COALESCE(SUM(total), 0)
+                        FROM vendas
+                        WHERE empresa_id = %s
+                          AND date_trunc('month', criado_em) = date_trunc('month', CURRENT_DATE);
+                        """,
+                        (empresa_id,),
+                    )
+                    fat_mes_dec = Decimal(str(cur.fetchone()[0] or "0.00"))
+
+                    a_receber_dec = Decimal("0.00")
+                    qtd_pendentes = 0
+                    try:
+                        cur.execute(
+                            """
+                            SELECT COUNT(*), COALESCE(SUM(valor), 0)
+                            FROM lancamentos_financeiros
+                            WHERE empresa_id = %s
+                              AND lower(COALESCE(tipo, '')) = 'entrada'
+                              AND lower(COALESCE(status, '')) != 'pago';
+                            """,
+                            (empresa_id,),
+                        )
+                        row_pend = cur.fetchone()
+                        qtd_pendentes = int(row_pend[0] or 0)
+                        a_receber_dec = Decimal(str(row_pend[1] or "0.00"))
+                    except Exception:
+                        conn.rollback()
+
+                    kpis.update({
+                        "faturamento_mes": _fmt_brl(fat_mes_dec),
+                        "tendencia_mes": f"{meses_pt[hoje.month - 1]}/{hoje.year}",
+                        "ticket_medio": _fmt_brl(ticket_dec),
+                        "tendencia_ticket": f"Em {total_vendas} venda(s)",
+                        "vendas_hoje": vendas_hoje,
+                        "valor_hoje": _fmt_brl(valor_hoje_dec),
+                        "a_receber": _fmt_brl(a_receber_dec),
+                        "qtd_pendentes": qtd_pendentes,
+                        "total_clientes": total_cli,
+                        "total_produtos": total_prod,
+                        "total_vendas": total_vendas,
+                        "receita_total": _fmt_brl(receita_total_dec),
+                    })
+
+                    soma_modulos = total_cli + total_prod + total_vendas
+                    if soma_modulos > 0:
+                        p_cli = round(total_cli * 100 / soma_modulos)
+                        p_prod = round(total_prod * 100 / soma_modulos)
+                        p_ven = max(0, 100 - p_cli - p_prod)
+                        dist = {
+                            "clientes": p_cli,
+                            "produtos": p_prod,
+                            "vendas": p_ven,
+                            "total_itens": soma_modulos,
+                        }
+
+                    cur.execute(
+                        """
+                        SELECT
+                            v.id,
+                            COALESCE(c.nome, 'Consumidor final') AS cliente_nome,
+                            v.total,
+                            COALESCE(v.forma_pagamento, 'À vista') AS forma_pagamento
+                        FROM vendas v
+                        LEFT JOIN clientes c ON c.id = v.cliente_id AND c.empresa_id = v.empresa_id
+                        WHERE v.empresa_id = %s
+                        ORDER BY v.id DESC
+                        LIMIT 6;
+                        """,
+                        (empresa_id,),
+                    )
+                    for r in cur.fetchall():
+                        vendas_recentes.append({
+                            "id": r[0],
+                            "cliente_nome": r[1],
+                            "valor_formatado": _fmt_brl(r[2]),
+                            "status": "paga",
+                        })
+
+                    cur.execute(
+                        """
+                        SELECT nome, estoque
+                        FROM produtos
+                        WHERE empresa_id = %s
+                          AND COALESCE(estoque, 0) <= 5
+                        ORDER BY estoque ASC, nome ASC
+                        LIMIT 6;
+                        """,
+                        (empresa_id,),
+                    )
+                    for r in cur.fetchall():
+                        alertas_estoque.append({
+                            "nome": r[0],
+                            "estoque": int(r[1] or 0),
+                        })
+
+                    try:
+                        cur.execute(
+                            """
+                            SELECT nome, telefone, email, criado_em
+                            FROM clientes
+                            WHERE empresa_id = %s
+                            ORDER BY id DESC
+                            LIMIT 6;
+                            """,
+                            (empresa_id,),
+                        )
+                        for r in cur.fetchall():
+                            dt_str = "-"
+                            if isinstance(r[3], datetime):
+                                dt_str = r[3].strftime("%d/%m/%Y")
+                            elif isinstance(r[3], date):
+                                dt_str = r[3].strftime("%d/%m/%Y")
+                            elif r[3]:
+                                dt_str = str(r[3])[:10]
+                            recentes_clientes.append({
+                                "nome": r[0],
+                                "telefone": r[1],
+                                "email": r[2],
+                                "criado_em": dt_str,
+                            })
+                    except Exception:
+                        conn.rollback()
+                        cur.execute(
+                            """
+                            SELECT nome
+                            FROM clientes
+                            WHERE empresa_id = %s
+                            ORDER BY id DESC
+                            LIMIT 6;
+                            """,
+                            (empresa_id,),
+                        )
+                        for r in cur.fetchall():
+                            recentes_clientes.append({
+                                "nome": r[0],
+                                "telefone": "-",
+                                "email": None,
+                                "criado_em": "-",
+                            })
+
+                    cur.execute(
+                        """
+                        SELECT
+                            date_trunc('month', criado_em) AS mes_ref,
+                            COALESCE(SUM(total), 0) AS total_mes
+                        FROM vendas
+                        WHERE empresa_id = %s
+                          AND criado_em >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+                        GROUP BY 1
+                        ORDER BY 1 ASC;
+                        """,
+                        (empresa_id,),
+                    )
+                    mapa_meses = {}
+                    for m_ref, m_tot in cur.fetchall():
+                        if isinstance(m_ref, (datetime, date)):
+                            chave = (m_ref.year, m_ref.month)
+                            mapa_meses[chave] = Decimal(str(m_tot or "0.00"))
+
+                    serie_bruta = []
+                    ano_cur = hoje.year
+                    mes_cur = hoje.month
+                    for offset in range(5, -1, -1):
+                        total_meses = (ano_cur * 12 + (mes_cur - 1)) - offset
+                        a = total_meses // 12
+                        m = (total_meses % 12) + 1
+                        val = mapa_meses.get((a, m), Decimal("0.00"))
+                        serie_bruta.append({
+                            "mes": meses_pt[m - 1],
+                            "valor": float(val),
+                        })
+
+                    maior_val = max([item["valor"] for item in serie_bruta] or [0.0])
+                    for item in serie_bruta:
+                        if maior_val > 0:
+                            # Mapeia de y=150 (0) até y=35 (máximo)
+                            y_pos = round(150 - ((item["valor"] / maior_val) * 115))
+                        else:
+                            y_pos = 150
+                        serie_mensal.append({
+                            "mes": item["mes"],
+                            "valor": item["valor"],
+                            "y": y_pos,
+                        })
     except Exception as exc:
-        flash(f"Nao foi possivel carregar todos os indicadores: {exc}", "warning")
+        flash(f"Não foi possível carregar todos os indicadores: {exc}", "warning")
 
-    nome_empresa = (
-        empresa.get("nome") if isinstance(empresa, dict) and empresa.get("nome") else "Nenhuma empresa ativa"
+    return render_template(
+        "dashboard.html",
+        empresa_ativa=empresa,
+        usuario_logado=usuario_logado,
+        data_atual=hoje.strftime("%d/%m/%Y"),
+        kpis=kpis,
+        dist=dist,
+        recentes_vendas=vendas_recentes,
+        alertas_estoque=alertas_estoque,
+        recentes_clientes=recentes_clientes,
+        serie_mensal=serie_mensal,
     )
-    html_dashboard = """{% extends "base.html" %}
-{% block title %}Dashboard - SimploGestão{% endblock %}
-{% block content %}
-<div class="page-header">
-  <div>
-    <h1>Dashboard</h1>
-    <p>Visão geral da empresa ativa e acesso rápido aos módulos do SimploGestão.</p>
-  </div>
-</div>
-
-<div class="card" style="max-width:560px;margin-bottom:16px;">
-  <div class="form-stack">
-    <div class="form-group">
-      <label>Empresa ativa</label>
-      <p style="margin:0;font-weight:600;">{{ nome_empresa|e }}</p>
-    </div>
-
-    <div class="form-group">
-      <label>Resumo operacional</label>
-      <p style="margin:0;">Empresas cadastradas: <strong>{{ totais.empresas }}</strong> &middot; Clientes da empresa: <strong>{{ totais.clientes }}</strong>{% if totais.produtos is not none %} &middot; Produtos: <strong>{{ totais.produtos }}</strong>{% endif %}{% if totais.vendas is not none %} &middot; Vendas: <strong>{{ totais.vendas }}</strong>{% endif %}</p>
-    </div>
-
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;">
-      <a href="{{ safe_url('clientes', '/clientes') }}" class="btn btn-primary">Abrir Clientes</a>
-      <a href="{{ safe_url('empresas', '/empresas') }}" class="btn btn-secondary">Gerenciar Empresas</a>
-    </div>
-  </div>
-</div>
-{% endblock %}"""
-    return render_template_string(
-        html_dashboard,
-        pagina="dashboard",
-        nome_empresa=nome_empresa,
-        totais=totais,
-    )
-
 @app.route("/empresas/cadastrar", methods=["GET", "POST"])
 def cadastrar_empresa():
     _garantir_colunas_empresas()
