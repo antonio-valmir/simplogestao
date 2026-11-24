@@ -501,6 +501,18 @@ def garantir_estrutura_vendas(conn):
     with conn.cursor() as cur:
         cur.execute(
             """
+            CREATE TABLE IF NOT EXISTS venda_itens (
+                id SERIAL PRIMARY KEY,
+                venda_id INTEGER NOT NULL REFERENCES vendas(id) ON DELETE CASCADE,
+                produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE RESTRICT,
+                quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+                preco_unitario NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0
+            );
+            """
+        )
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS vendas (
                 id SERIAL PRIMARY KEY,
                 empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -515,6 +527,65 @@ def garantir_estrutura_vendas(conn):
         cur.execute("ALTER TABLE vendas ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(40) NOT NULL DEFAULT 'À vista';")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_vendas_empresa_id ON vendas (empresa_id, id DESC);")
 
+
+@app.route("/vendas/<int:venda_id>/comprovante")
+def comprovante_venda(venda_id):
+    with get_db_connection() as conn:
+        garantir_tabelas_base(conn)
+        garantir_estrutura_vendas(conn)
+        empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+        empresa_id = _empresa_id_seguro(empresa)
+        if not empresa_id:
+            flash("Selecione ou cadastre uma empresa antes de visualizar o comprovante.", "warning")
+            return redirect(url_for("empresas"))
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    v.id,
+                    v.empresa_id,
+                    v.cliente_id,
+                    COALESCE(v.forma_pagamento, 'À vista') AS forma_pagamento,
+                    v.total,
+                    v.criado_em,
+                    COALESCE(c.nome, 'Consumidor final') AS cliente_nome,
+                    COALESCE(e.nome, 'Empresa') AS empresa_nome
+                FROM vendas v
+                LEFT JOIN clientes c ON c.id = v.cliente_id AND c.empresa_id = v.empresa_id
+                LEFT JOIN empresas e ON e.id = v.empresa_id
+                WHERE v.id = %s AND v.empresa_id = %s;
+                """,
+                (venda_id, empresa_id),
+            )
+            venda = cur.fetchone()
+            if not venda:
+                flash("Comprovante não encontrado para a empresa ativa.", "warning")
+                return redirect(url_for("vendas"))
+
+            cur.execute(
+                """
+                SELECT
+                    vi.id,
+                    p.nome,
+                    vi.quantidade,
+                    vi.preco_unitario,
+                    vi.subtotal
+                FROM venda_itens vi
+                JOIN produtos p ON p.id = vi.produto_id
+                WHERE vi.venda_id = %s
+                ORDER BY vi.id ASC;
+                """,
+                (venda_id,),
+            )
+            itens = cur.fetchall()
+
+    return render_template(
+        "comprovante_venda.html",
+        venda=venda,
+        itens=itens,
+        empresa_ativa=empresa,
+    )
 
 @app.route("/vendas", methods=["GET", "POST"])
 def vendas():
@@ -531,40 +602,71 @@ def vendas():
 
         if request.method == "POST":
             cliente_raw = request.form.get("cliente_id", "").strip()
-            produto_raw = request.form.get("produto_id", "").strip()
-            qtd_raw = request.form.get("quantidade", "1").strip()
+            produtos_raw = request.form.getlist("produto_id")
+            qtds_raw = request.form.getlist("quantidade")
             forma_pagamento = request.form.get("forma_pagamento", "À vista").strip() or "À vista"
 
             try:
                 cliente_id = int(cliente_raw) if cliente_raw else None
-                produto_id = int(produto_raw)
-                quantidade = int(qtd_raw)
             except ValueError:
                 cliente_id = None
-                produto_id = None
-                quantidade = None
 
-            if not produto_id or not quantidade or quantidade <= 0:
-                erro_venda = "Selecione uma mercadoria válida e informe quantidade maior que zero."
+            itens_agrupados = {}
+            erro_validacao_itens = False
+            for idx, p_raw in enumerate(produtos_raw):
+                p_str = (p_raw or "").strip()
+                q_str = (qtds_raw[idx] if idx < len(qtds_raw) else "1").strip()
+                if not p_str and not q_str:
+                    continue
+                try:
+                    pid = int(p_str)
+                    qtd = int(q_str)
+                except ValueError:
+                    erro_validacao_itens = True
+                    break
+                if pid <= 0 or qtd <= 0:
+                    erro_validacao_itens = True
+                    break
+                itens_agrupados[pid] = itens_agrupados.get(pid, 0) + qtd
+
+            if erro_validacao_itens or not itens_agrupados:
+                erro_venda = "Selecione ao menos uma mercadoria válida e informe quantidade maior que zero."
             else:
                 try:
                     with conn.cursor() as cur:
-                        cur.execute(
-                            "SELECT id, nome, preco, estoque FROM produtos WHERE id = %s AND empresa_id = %s FOR UPDATE;",
-                            (produto_id, empresa_id),
-                        )
-                        prod = cur.fetchone()
-                        if not prod:
-                            erro_venda = "Mercadoria não encontrada para a empresa ativa."
-                            conn.rollback()
-                        elif int(prod[3]) < quantidade:
-                            erro_venda = f"Estoque insuficiente para {prod[1]} (disponível: {prod[3]} un.)."
+                        itens_resolvidos = []
+                        total_venda = Decimal("0.00")
+
+                        for pid, qtd in itens_agrupados.items():
+                            cur.execute(
+                                "SELECT id, nome, preco, estoque FROM produtos WHERE id = %s AND empresa_id = %s FOR UPDATE;",
+                                (pid, empresa_id),
+                            )
+                            prod = cur.fetchone()
+                            if not prod:
+                                erro_venda = "Uma das mercadorias selecionadas não foi encontrada para a empresa ativa."
+                                break
+                            if int(prod[3]) < qtd:
+                                erro_venda = f"Estoque insuficiente para {prod[1]} (disponível: {prod[3]} un., solicitado: {qtd} un.)."
+                                break
+
+                            preco_unit = Decimal(str(prod[2] or "0.00"))
+                            subtotal = (preco_unit * Decimal(qtd)).quantize(Decimal("0.01"))
+                            total_venda += subtotal
+                            itens_resolvidos.append(
+                                {
+                                    "id": prod[0],
+                                    "nome": prod[1],
+                                    "qtd": qtd,
+                                    "preco_unit": preco_unit,
+                                    "subtotal": subtotal,
+                                }
+                            )
+
+                        if erro_venda:
                             conn.rollback()
                         else:
-                            nome_prod = prod[1]
-                            preco_unit = Decimal(str(prod[2] or "0.00"))
-                            total_venda = (preco_unit * Decimal(quantidade)).quantize(Decimal("0.01"))
-
+                            total_venda = total_venda.quantize(Decimal("0.01"))
                             cliente_nome = "Consumidor final"
                             if cliente_id is not None:
                                 cur.execute(
@@ -578,11 +680,6 @@ def vendas():
                                     cliente_id = None
 
                             cur.execute(
-                                "UPDATE produtos SET estoque = estoque - %s WHERE id = %s AND empresa_id = %s;",
-                                (quantidade, produto_id, empresa_id),
-                            )
-
-                            cur.execute(
                                 """
                                 INSERT INTO vendas (empresa_id, cliente_id, forma_pagamento, total)
                                 VALUES (%s, %s, %s, %s)
@@ -592,6 +689,22 @@ def vendas():
                             )
                             venda_id = cur.fetchone()[0]
 
+                            resumo_itens = []
+                            for item in itens_resolvidos:
+                                cur.execute(
+                                    "UPDATE produtos SET estoque = estoque - %s WHERE id = %s AND empresa_id = %s;",
+                                    (item["qtd"], item["id"], empresa_id),
+                                )
+                                cur.execute(
+                                    """
+                                    INSERT INTO venda_itens (venda_id, produto_id, quantidade, preco_unitario, subtotal)
+                                    VALUES (%s, %s, %s, %s, %s);
+                                    """,
+                                    (venda_id, item["id"], item["qtd"], item["preco_unit"], item["subtotal"]),
+                                )
+                                resumo_itens.append(f"{item['nome']} ({item['qtd']}x)")
+
+                            descricao_itens = ", ".join(resumo_itens)
                             cur.execute(
                                 """
                                 INSERT INTO lancamentos_financeiros (
@@ -603,7 +716,7 @@ def vendas():
                                 (
                                     empresa_id,
                                     venda_id,
-                                    f"Venda #{venda_id} - {nome_prod} ({quantidade}x) - {cliente_nome}",
+                                    f"Venda #{venda_id} - {descricao_itens} - {cliente_nome}",
                                     forma_pagamento,
                                     total_venda,
                                 ),
@@ -612,10 +725,10 @@ def vendas():
                     if not erro_venda:
                         conn.commit()
                         flash(
-                            f"Venda #{venda_id} confirmada: -{quantidade} un. de {nome_prod} (R$ {total_venda:.2f}).",
+                            f"Venda #{venda_id} confirmada ({descricao_itens}) — Total: R$ {total_venda:.2f}.",
                             "success",
                         )
-                        return redirect(url_for("vendas"))
+                        return redirect(url_for("comprovante_venda", venda_id=venda_id))
                 except Exception as exc:
                     conn.rollback()
                     erro_venda = f"Erro ao registrar venda: {exc}"

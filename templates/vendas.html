@@ -18,7 +18,7 @@
 <div class="grid-2">
   <section class="card">
     <h2>Nova Venda à Vista</h2>
-    <p class="muted" style="margin-bottom:14px;">Selecione a mercadoria, a quantidade e a forma de pagamento à vista.</p>
+    <p class="muted" style="margin-bottom:14px;">Selecione uma ou mais mercadorias, as quantidades e a forma de pagamento à vista.</p>
 
     {% if erro_venda %}
     <div class="alert alert-danger" style="padding:12px 16px;border-radius:8px;background:#fee2e2;color:#991b1b;margin-bottom:16px;">
@@ -38,20 +38,28 @@
         </select>
       </div>
 
-      <div class="form-group">
-        <label for="produto_id">Mercadoria *</label>
-        <select id="produto_id" name="produto_id" required>
-          {% for prod in produtos %}
-          <option value="{{ prod[0] }}" {% if prod[3] <= 0 %}disabled{% endif %}>
-            {{ prod[1] }} — R$ {{ "%.2f"|format(prod[2]|float) }} ({{ prod[3] }} un em estoque)
-          </option>
-          {% endfor %}
-        </select>
+      <div id="itens-venda-lista">
+        <div class="item-venda-linha" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;">
+          <div class="form-group" style="flex:1 1 220px;margin-bottom:0;">
+            <label>Mercadoria *</label>
+            <select name="produto_id" required>
+              {% for prod in produtos %}
+              <option value="{{ prod[0] }}" {% if prod[3] <= 0 %}disabled{% endif %}>
+                {{ prod[1] }} — R$ {{ "%.2f"|format(prod[2]|float) }} ({{ prod[3] }} un em estoque)
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group" style="width:110px;margin-bottom:0;">
+            <label>Qtd. *</label>
+            <input name="quantidade" type="number" step="1" min="1" value="1" required>
+          </div>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label for="quantidade">Quantidade *</label>
-        <input id="quantidade" name="quantidade" type="number" step="1" min="1" value="1" required>
+      <div style="margin-bottom:12px;">
+        <button type="button" id="btn-adicionar-item" class="btn-primary" style="opacity:0.9;">+ Adicionar outro produto</button>
       </div>
 
       <div class="form-group">
@@ -66,6 +74,34 @@
 
       <button type="submit" class="btn-primary">Confirmar venda à vista</button>
     </form>
+
+    <script>
+      (function () {
+        const lista = document.getElementById("itens-venda-lista");
+        const btnAdd = document.getElementById("btn-adicionar-item");
+        if (!lista || !btnAdd) return;
+
+        btnAdd.addEventListener("click", function () {
+          const primeiraLinha = lista.querySelector(".item-venda-linha");
+          if (!primeiraLinha) return;
+          const novaLinha = primeiraLinha.cloneNode(true);
+          const qtdInput = novaLinha.querySelector('input[name="quantidade"]');
+          if (qtdInput) qtdInput.value = "1";
+
+          const btnRemover = document.createElement("button");
+          btnRemover.type = "button";
+          btnRemover.className = "btn-primary";
+          btnRemover.textContent = "Remover";
+          btnRemover.style.opacity = "0.8";
+          btnRemover.addEventListener("click", function () {
+            novaLinha.remove();
+          });
+
+          novaLinha.appendChild(btnRemover);
+          lista.appendChild(novaLinha);
+        });
+      })();
+    </script>
     {% else %}
     <div class="empty-state">
       <strong>Cadastre uma mercadoria antes de vender</strong>

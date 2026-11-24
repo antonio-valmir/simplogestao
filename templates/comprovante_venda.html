@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}SimploGestão — Comprovante da Venda #{{ venda[0] }}{% endblock %}
+
+{% block content %}
+<style>
+  @media print {
+    .no-print, nav, header, aside, .module-hero, .flash-messages, .flash {
+      display: none !important;
+    }
+    .card {
+      box-shadow: none !important;
+      border: 1px solid #ccc !important;
+      margin: 0 !important;
+      padding: 16px !important;
+    }
+    body {
+      background: #fff !important;
+    }
+  }
+</style>
+
+<section class="module-hero no-print">
+  <div>
+    <span class="module-hero-tag">SimploGestão • Comprovante</span>
+    <h1>Comprovante da Venda #{{ venda[0] }}</h1>
+    <p>Confira os itens da venda e imprima o comprovante para o cliente.</p>
+  </div>
+  <div class="hero-stat-pill">
+    <div class="hero-stat-label">Total da Venda</div>
+    <div class="hero-stat-value">R$ {{ "%.2f"|format(venda[4]|float) }}</div>
+  </div>
+</section>
+
+<section class="card" style="max-width:720px;margin:0 auto;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:14px;">
+    <div>
+      <h2 style="margin:0;">{{ venda[7] }}</h2>
+      <p class="muted" style="margin:4px 0 0;">Comprovante de Venda #{{ venda[0] }}</p>
+    </div>
+    <div style="text-align:right;">
+      <div><strong>Data:</strong> {{ venda[5].strftime("%d/%m/%Y %H:%M") if venda[5] else "-" }}</div>
+      <div><strong>Pagamento:</strong> {{ venda[3] }}</div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:14px;">
+    <strong>Cliente:</strong> {{ venda[6] }}
+  </div>
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Mercadoria</th>
+          <th>Qtd.</th>
+          <th>Unitário</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in itens %}
+        <tr>
+          <td><strong>{{ it[1] }}</strong></td>
+          <td>{{ it[2] }} un</td>
+          <td>R$ {{ "%.2f"|format(it[3]|float) }}</td>
+          <td><strong>R$ {{ "%.2f"|format(it[4]|float) }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb;">
+    <div style="font-size:1.15rem;"><strong>Total: R$ {{ "%.2f"|format(venda[4]|float) }}</strong></div>
+  </div>
+
+  <div class="no-print" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap;">
+    <button type="button" class="btn-primary" onclick="window.print()">Imprimir Comprovante</button>
+    <a href="{{ url_for('vendas') }}" class="btn-primary" style="text-decoration:none;opacity:0.85;">Nova Venda</a>
+  </div>
+</section>
+{% endblock %}
