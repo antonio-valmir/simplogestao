@@ -1802,6 +1802,40 @@ def financeiro():
     )
 
 
+@app.context_processor
+def injetar_notificacoes_estoque():
+    itens_baixo = []
+    try:
+        with get_db_connection() as conn:
+            empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+            empresa_id = _empresa_id_seguro(empresa)
+            if empresa_id:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, nome, COALESCE(estoque, 0)
+                        FROM produtos
+                        WHERE empresa_id = %s
+                          AND COALESCE(estoque, 0) < 5
+                        ORDER BY COALESCE(estoque, 0) ASC, nome ASC
+                        LIMIT 30;
+                        """,
+                        (empresa_id,),
+                    )
+                    for pid, nome, est in cur.fetchall():
+                        itens_baixo.append({
+                            "id": pid,
+                            "nome": nome,
+                            "estoque": int(est or 0),
+                        })
+    except Exception:
+        itens_baixo = []
+    return {
+        "notificacoes_estoque_baixo": itens_baixo,
+        "qtd_estoque_baixo": len(itens_baixo),
+    }
+
+
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")
     port = int(os.getenv("FLASK_PORT", "5000"))
