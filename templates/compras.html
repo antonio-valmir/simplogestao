@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set page_title = "Compras e Estoque — SimploGestão" %}
+
+{% block content %}
+<section class="module-hero">
+  <div class="module-hero-text">
+    <span class="module-eyebrow">Entrada de Mercadorias</span>
+    <h2>Compras e Reposição de Estoque</h2>
+    <p>Registre compras da empresa ativa, atualize o estoque automaticamente e gere lançamentos financeiros.</p>
+  </div>
+</section>
+
+<section class="card" style="margin-bottom:16px;">
+  <div class="card-header">
+    <div>
+      <h3>Nova compra</h3>
+      <p class="muted">Soma a quantidade no estoque do produto selecionado e cria despesa vinculada.</p>
+    </div>
+  </div>
+
+  {% if produtos %}
+  <form method="post" action="{{ url_for('compras') }}">
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="produto_id">Produto</label>
+        <select id="produto_id" name="produto_id" required>
+          {% for prod in produtos %}
+          <option value="{{ prod[0] }}">{{ prod[1] }} (Estoque atual: {{ prod[2] }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="quantidade">Quantidade</label>
+        <input id="quantidade" name="quantidade" type="number" min="1" step="1" required>
+      </div>
+
+      <div class="form-group">
+        <label for="custo_unitario">Custo unitário (R$)</label>
+        <input id="custo_unitario" name="custo_unitario" type="text" placeholder="0.00" required>
+      </div>
+
+      <div class="form-group">
+        <label for="fornecedor">Fornecedor</label>
+        <input id="fornecedor" name="fornecedor" type="text" placeholder="Ex.: Distribuidora Central">
+      </div>
+
+      <div class="form-group">
+        <label for="forma_pagamento">Forma de pagamento</label>
+        <select id="forma_pagamento" name="forma_pagamento">
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="PIX">PIX</option>
+          <option value="Boleto">Boleto</option>
+          <option value="Cartão">Cartão</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="status_pagamento">Status financeiro</label>
+        <select id="status_pagamento" name="status_pagamento">
+          <option value="Pendente">Pendente (A pagar)</option>
+          <option value="Pago">Pago</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top:12px;">
+      <button type="submit" class="btn-primary">Registrar compra</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty-state">
+    <strong>Nenhum produto cadastrado nesta empresa</strong>
+    <p class="muted">Cadastre um produto em <a href="{{ url_for('produtos') }}">/produtos</a> antes de registrar compras.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h3>Histórico de compras</h3>
+      <p class="muted">Registros filtrados pela empresa ativa.</p>
+    </div>
+  </div>
+
+  {% if compras %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Data</th>
+          <th>Produto</th>
+          <th>Fornecedor</th>
+          <th>Qtd.</th>
+          <th>Custo un.</th>
+          <th>Total</th>
+          <th>Financeiro</th>
+          <th>Status</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in compras %}
+        <tr>
+          <td><span class="id-pill">#{{ c[0] }}</span></td>
+          <td>{{ c[1].strftime("%d/%m/%Y %H:%M") if c[1] else "-" }}</td>
+          <td><strong>{{ c[2] }}</strong></td>
+          <td>{{ c[3] or "-" }}</td>
+          <td>+{{ c[4] }}</td>
+          <td>R$ {{ "%.2f"|format(c[5]|float) }}</td>
+          <td><strong>R$ {{ "%.2f"|format(c[6]|float) }}</strong></td>
+          <td>{{ c[7] }} &middot; {{ c[8] }}</td>
+          <td><strong>{{ c[9] }}</strong></td>
+          <td>
+            {% if c[9] != 'Cancelada' %}
+            <form method="post" action="{{ url_for('cancelar_compra', compra_id=c[0]) }}" style="display:inline;">
+              <button type="submit" class="btn-secondary">Estornar</button>
+            </form>
+            {% else %}
+            <span class="muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <strong>Nenhuma compra registrada</strong>
+    <p class="muted">As entradas de mercadoria da empresa ativa aparecerão aqui.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

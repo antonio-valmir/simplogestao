@@ -1,37 +1,34 @@
 {% extends "base.html" %}
-{% set page_title = "Vendas à Vista — SimploGestão" %}
+
+{% block title %}SimploGestão — Vendas{% endblock %}
 
 {% block content %}
 <section class="module-hero">
-  <div class="module-hero-text">
-    <span class="module-eyebrow">Operação de Caixa</span>
-    <h2>Efetuar Venda à Vista</h2>
+  <div>
+    <span class="module-hero-tag">SimploGestão • Vendas</span>
+    <h1>Gestão de Vendas à Vista</h1>
     <p>Registre vendas com pagamento à vista, baixa automática de estoque e isolamento por empresa.</p>
   </div>
-  <div class="module-hero-badge">
-    <span class="hero-count">{{ vendas|length }}</span>
-    <span class="hero-label">Vendas</span>
+  <div class="hero-stat-pill">
+    <div class="hero-stat-label">Vendas Registradas</div>
+    <div class="hero-stat-value">{{ vendas|length }}</div>
   </div>
 </section>
 
 <div class="grid-2">
   <section class="card">
-    <div class="card-header">
-      <div>
-        <h3>Nova venda à vista</h3>
-        <p class="muted">Selecione a mercadoria, a quantidade e a forma de pagamento à vista.</p>
-      </div>
-    </div>
+    <h2>Nova Venda à Vista</h2>
+    <p class="muted" style="margin-bottom:14px;">Selecione a mercadoria, a quantidade e a forma de pagamento à vista.</p>
 
     {% if erro_venda %}
-    <div class="alert-error">
+    <div class="alert alert-danger" style="padding:12px 16px;border-radius:8px;background:#fee2e2;color:#991b1b;margin-bottom:16px;">
       {{ erro_venda }}
     </div>
     {% endif %}
 
     {% if produtos %}
     <form method="post" action="{{ url_for('vendas') }}" class="form-stack">
-      <div class="field">
+      <div class="form-group">
         <label for="cliente_id">Cliente (opcional)</label>
         <select id="cliente_id" name="cliente_id">
           <option value="">Consumidor final / Balcão</option>
@@ -41,7 +38,7 @@
         </select>
       </div>
 
-      <div class="field">
+      <div class="form-group">
         <label for="produto_id">Mercadoria *</label>
         <select id="produto_id" name="produto_id" required>
           {% for prod in produtos %}
@@ -52,12 +49,12 @@
         </select>
       </div>
 
-      <div class="field">
+      <div class="form-group">
         <label for="quantidade">Quantidade *</label>
         <input id="quantidade" name="quantidade" type="number" step="1" min="1" value="1" required>
       </div>
 
-      <div class="field">
+      <div class="form-group">
         <label for="forma_pagamento">Pagamento à vista *</label>
         <select id="forma_pagamento" name="forma_pagamento" required>
           <option value="À vista">À vista</option>
@@ -78,12 +75,8 @@
   </section>
 
   <section class="card">
-    <div class="card-header">
-      <div>
-        <h3>Últimas vendas da empresa</h3>
-        <p class="muted">Registros vinculados à empresa ativa.</p>
-      </div>
-    </div>
+    <h2>Últimas Vendas da Empresa</h2>
+    <p class="muted" style="margin-bottom:14px;">Registros vinculados à empresa ativa.</p>
 
     {% if vendas %}
     <div class="table-wrap">

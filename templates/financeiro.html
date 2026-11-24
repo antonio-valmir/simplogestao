@@ -1,46 +1,43 @@
 {% extends "base.html" %}
-{% set page_title = "Histórico e Financeiro — SimploGestão" %}
+
+{% block title %}SimploGestão — Financeiro{% endblock %}
 
 {% block content %}
 <section class="module-hero">
-  <div class="module-hero-text">
-    <span class="module-eyebrow">Caixa e Movimentação</span>
-    <h2>Histórico de Vendas e Financeiro (À Vista)</h2>
+  <div>
+    <span class="module-hero-tag">SimploGestão • Financeiro</span>
+    <h1>Gestão Financeira e Histórico</h1>
     <p>Acompanhe o faturamento à vista, o resumo por forma de pagamento e o histórico da empresa ativa.</p>
   </div>
-  <div class="module-hero-badge">
-    <span class="hero-count">R$ {{ "%.2f"|format(resumo.total_avista|float) }}</span>
-    <span class="hero-label">Total à vista</span>
+  <div class="hero-stat-pill">
+    <div class="hero-stat-label">Total à Vista</div>
+    <div class="hero-stat-value">R$ {{ "%.2f"|format(resumo.total_avista|float) }}</div>
   </div>
 </section>
 
 <div class="grid-3">
   <section class="card">
     <span class="muted">Total vendido à vista</span>
-    <h3>R$ {{ "%.2f"|format(resumo.total_avista|float) }}</h3>
+    <h2>R$ {{ "%.2f"|format(resumo.total_avista|float) }}</h2>
     <p class="muted">Entradas consolidadas da empresa ativa.</p>
   </section>
 
   <section class="card">
     <span class="muted">Vendas concluídas</span>
-    <h3>{{ resumo.qtd_vendas }}</h3>
+    <h2>{{ resumo.qtd_vendas }}</h2>
     <p class="muted">Operações à vista registradas.</p>
   </section>
 
   <section class="card">
     <span class="muted">Ticket médio</span>
-    <h3>R$ {{ "%.2f"|format(resumo.ticket_medio|float) }}</h3>
+    <h2>R$ {{ "%.2f"|format(resumo.ticket_medio|float) }}</h2>
     <p class="muted">Média por venda à vista.</p>
   </section>
 </div>
 
-<section class="card">
-  <div class="card-header">
-    <div>
-      <h3>Resumo por forma de pagamento à vista</h3>
-      <p class="muted">Totais filtrados pela empresa ativa.</p>
-    </div>
-  </div>
+<section class="card" style="margin-top:16px;">
+  <h2>Resumo por Forma de Pagamento à Vista</h2>
+  <p class="muted" style="margin-bottom:14px;">Totais filtrados pela empresa ativa.</p>
 
   {% if por_pagamento %}
   <div class="table-wrap">
@@ -71,13 +68,9 @@
   {% endif %}
 </section>
 
-<section class="card">
-  <div class="card-header">
-    <div>
-      <h3>Histórico de vendas</h3>
-      <p class="muted">Lançamentos da empresa ativa com isolamento por empresa.</p>
-    </div>
-  </div>
+<section class="card" style="margin-top:16px;">
+  <h2>Histórico de Vendas</h2>
+  <p class="muted" style="margin-bottom:14px;">Lançamentos da empresa ativa com isolamento por empresa.</p>
 
   {% if historico %}
   <div class="table-wrap">
@@ -110,6 +103,126 @@
   <div class="empty-state">
     <strong>Histórico vazio</strong>
     <p class="muted">Nenhuma venda foi registrada para esta empresa até o momento.</p>
+  </div>
+  {% endif %}
+</section>
+
+<div class="grid-3" style="margin-top:16px;">
+  <section class="card">
+    <span class="muted">Saldo em caixa (realizado)</span>
+    <h2>R$ {{ "%.2f"|format(resumo.saldo_caixa|float) }}</h2>
+    <p class="muted">Entradas pagas menos saídas pagas.</p>
+  </section>
+
+  <section class="card">
+    <span class="muted">A receber (pendente)</span>
+    <h2>R$ {{ "%.2f"|format(resumo.a_receber|float) }}</h2>
+    <p class="muted">Entradas previstas da empresa ativa.</p>
+  </section>
+
+  <section class="card">
+    <span class="muted">A pagar (pendente)</span>
+    <h2>R$ {{ "%.2f"|format(resumo.a_pagar|float) }}</h2>
+    <p class="muted">Compras e despesas pendentes.</p>
+  </section>
+</div>
+
+<section class="card" style="margin-top:16px;">
+  <h2>Novo Lançamento Financeiro</h2>
+  <p class="muted" style="margin-bottom:14px;">Registre receita ou despesa manual para a empresa ativa.</p>
+  <form method="post" action="{{ url_for('financeiro') }}">
+    <input type="hidden" name="acao" value="criar">
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="fin_tipo">Tipo</label>
+        <select id="fin_tipo" name="tipo">
+          <option value="saida">Despesa / A pagar (Saída)</option>
+          <option value="entrada">Receita / A receber (Entrada)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="fin_descricao">Descrição</label>
+        <input id="fin_descricao" name="descricao" type="text" placeholder="Ex.: Energia, internet, serviço" required>
+      </div>
+      <div class="form-group">
+        <label for="fin_valor">Valor (R$)</label>
+        <input id="fin_valor" name="valor" type="text" placeholder="0.00" required>
+      </div>
+      <div class="form-group">
+        <label for="fin_pagamento">Forma de pagamento</label>
+        <select id="fin_pagamento" name="forma_pagamento">
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="PIX">PIX</option>
+          <option value="Boleto">Boleto</option>
+          <option value="Cartão">Cartão</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="fin_status">Status</label>
+        <select id="fin_status" name="status">
+          <option value="Pendente">Pendente</option>
+          <option value="Pago">Pago</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="fin_vencimento">Vencimento</label>
+        <input id="fin_vencimento" name="vencimento" type="date">
+      </div>
+    </div>
+    <div class="form-actions" style="margin-top:12px;">
+      <button type="submit" class="btn-primary">Salvar lançamento</button>
+    </div>
+  </form>
+</section>
+
+<section class="card" style="margin-top:16px;">
+  <h2>Lançamentos Financeiros (Contas e Movimentações)</h2>
+  <p class="muted" style="margin-bottom:14px;">Isolados por empresa ativa.</p>
+  {% if lancamentos %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Tipo</th>
+          <th>Descrição</th>
+          <th>Origem</th>
+          <th>Vencimento</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lancamentos %}
+        <tr>
+          <td><span class="id-pill">#{{ l[0] }}</span></td>
+          <td>{{ "Entrada" if l[2] == "entrada" else "Saída" }}</td>
+          <td><strong>{{ l[4] }}</strong></td>
+          <td>{{ l[3] }}</td>
+          <td>{{ l[8].strftime("%d/%m/%Y") if l[8] else "-" }}</td>
+          <td><strong>R$ {{ "%.2f"|format(l[6]|float) }}</strong></td>
+          <td>{{ l[7] }}</td>
+          <td>
+            {% if l[7] == "Pendente" %}
+            <form method="post" action="{{ url_for('financeiro') }}" style="display:inline;">
+              <input type="hidden" name="acao" value="baixar">
+              <input type="hidden" name="lancamento_id" value="{{ l[0] }}">
+              <button type="submit" class="btn-primary">Marcar Pago</button>
+            </form>
+            {% else %}
+            <span class="muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <strong>Nenhum lançamento financeiro ainda</strong>
+    <p class="muted">Compras, lançamentos manuais e movimentações aparecerão aqui.</p>
   </div>
   {% endif %}
 </section>

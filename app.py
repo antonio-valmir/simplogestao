@@ -439,36 +439,229 @@ def produtos():
     return render_template("produtos.html", produtos=lista_produtos, active_page="produtos")
 
 
-@app.route("/vendas")
+def garantir_tabelas_base(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS empresas (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(160) NOT NULL,
+                documento VARCHAR(40),
+                telefone VARCHAR(40),
+                email VARCHAR(120),
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(120) NOT NULL,
+                email VARCHAR(160) UNIQUE NOT NULL,
+                senha_hash TEXT NOT NULL,
+                empresa_id INTEGER REFERENCES empresas(id) ON DELETE SET NULL,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS clientes (
+                id SERIAL PRIMARY KEY,
+                empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
+                nome VARCHAR(160) NOT NULL,
+                telefone VARCHAR(40),
+                email VARCHAR(120),
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute("ALTER TABLE clientes ADD COLUMN IF NOT EXISTS empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE;")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS produtos (
+                id SERIAL PRIMARY KEY,
+                empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
+                nome VARCHAR(160) NOT NULL,
+                preco NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                estoque INTEGER NOT NULL DEFAULT 0,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE;")
+        cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco NUMERIC(12, 2) NOT NULL DEFAULT 0;")
+        cur.execute("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INTEGER NOT NULL DEFAULT 0;")
+
+
+def garantir_estrutura_vendas(conn):
+    garantir_tabelas_base(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS vendas (
+                id SERIAL PRIMARY KEY,
+                empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
+                cliente_id INTEGER,
+                forma_pagamento VARCHAR(40) NOT NULL DEFAULT 'À vista',
+                total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute("ALTER TABLE vendas ADD COLUMN IF NOT EXISTS empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE;")
+        cur.execute("ALTER TABLE vendas ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(40) NOT NULL DEFAULT 'À vista';")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_vendas_empresa_id ON vendas (empresa_id, id DESC);")
+
+
+@app.route("/vendas", methods=["GET", "POST"])
 def vendas():
-    return render_template("base.html", active_page="vendas")
+    with get_db_connection() as conn:
+        garantir_tabelas_compras_financeiro(conn)
+        garantir_estrutura_vendas(conn)
+        empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+        empresa_id = _empresa_id_seguro(empresa)
+        if not empresa_id:
+            flash("Selecione ou cadastre uma empresa antes de acessar Vendas.", "warning")
+            return redirect(url_for("empresas"))
 
+        erro_venda = None
 
-def _contar_registros_seguro(cur, tabela, empresa_id=None):
-    try:
-        cur.execute("SELECT to_regclass(%s);", (f"public.{tabela}",))
-        existe = cur.fetchone()
-        if not existe or not existe[0]:
-            return None
-        if empresa_id is not None:
+        if request.method == "POST":
+            cliente_raw = request.form.get("cliente_id", "").strip()
+            produto_raw = request.form.get("produto_id", "").strip()
+            qtd_raw = request.form.get("quantidade", "1").strip()
+            forma_pagamento = request.form.get("forma_pagamento", "À vista").strip() or "À vista"
+
+            try:
+                cliente_id = int(cliente_raw) if cliente_raw else None
+                produto_id = int(produto_raw)
+                quantidade = int(qtd_raw)
+            except ValueError:
+                cliente_id = None
+                produto_id = None
+                quantidade = None
+
+            if not produto_id or not quantidade or quantidade <= 0:
+                erro_venda = "Selecione uma mercadoria válida e informe quantidade maior que zero."
+            else:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT id, nome, preco, estoque FROM produtos WHERE id = %s AND empresa_id = %s FOR UPDATE;",
+                            (produto_id, empresa_id),
+                        )
+                        prod = cur.fetchone()
+                        if not prod:
+                            erro_venda = "Mercadoria não encontrada para a empresa ativa."
+                            conn.rollback()
+                        elif int(prod[3]) < quantidade:
+                            erro_venda = f"Estoque insuficiente para {prod[1]} (disponível: {prod[3]} un.)."
+                            conn.rollback()
+                        else:
+                            nome_prod = prod[1]
+                            preco_unit = Decimal(str(prod[2] or "0.00"))
+                            total_venda = (preco_unit * Decimal(quantidade)).quantize(Decimal("0.01"))
+
+                            cliente_nome = "Consumidor final"
+                            if cliente_id is not None:
+                                cur.execute(
+                                    "SELECT nome FROM clientes WHERE id = %s AND empresa_id = %s;",
+                                    (cliente_id, empresa_id),
+                                )
+                                cli_row = cur.fetchone()
+                                if cli_row:
+                                    cliente_nome = cli_row[0]
+                                else:
+                                    cliente_id = None
+
+                            cur.execute(
+                                "UPDATE produtos SET estoque = estoque - %s WHERE id = %s AND empresa_id = %s;",
+                                (quantidade, produto_id, empresa_id),
+                            )
+
+                            cur.execute(
+                                """
+                                INSERT INTO vendas (empresa_id, cliente_id, forma_pagamento, total)
+                                VALUES (%s, %s, %s, %s)
+                                RETURNING id;
+                                """,
+                                (empresa_id, cliente_id, forma_pagamento, total_venda),
+                            )
+                            venda_id = cur.fetchone()[0]
+
+                            cur.execute(
+                                """
+                                INSERT INTO lancamentos_financeiros (
+                                    empresa_id, tipo, origem, referencia_id,
+                                    descricao, forma_pagamento, valor, status, pago_em
+                                )
+                                VALUES (%s, 'entrada', 'venda', %s, %s, %s, %s, 'Pago', CURRENT_TIMESTAMP);
+                                """,
+                                (
+                                    empresa_id,
+                                    venda_id,
+                                    f"Venda #{venda_id} - {nome_prod} ({quantidade}x) - {cliente_nome}",
+                                    forma_pagamento,
+                                    total_venda,
+                                ),
+                            )
+
+                    if not erro_venda:
+                        conn.commit()
+                        flash(
+                            f"Venda #{venda_id} confirmada: -{quantidade} un. de {nome_prod} (R$ {total_venda:.2f}).",
+                            "success",
+                        )
+                        return redirect(url_for("vendas"))
+                except Exception as exc:
+                    conn.rollback()
+                    erro_venda = f"Erro ao registrar venda: {exc}"
+
+        clientes_lista = []
+        produtos_lista = []
+        vendas_lista = []
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, nome FROM clientes WHERE empresa_id = %s ORDER BY nome ASC;",
+                (empresa_id,),
+            )
+            clientes_lista = cur.fetchall()
+
+            cur.execute(
+                "SELECT id, nome, preco, estoque FROM produtos WHERE empresa_id = %s ORDER BY nome ASC;",
+                (empresa_id,),
+            )
+            produtos_lista = cur.fetchall()
+
             cur.execute(
                 """
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = %s AND column_name = 'empresa_id'
-                LIMIT 1;
+                SELECT
+                    v.id,
+                    COALESCE(c.nome, 'Consumidor final') AS cliente_nome,
+                    COALESCE(v.forma_pagamento, 'À vista') AS forma_pagamento,
+                    v.total
+                FROM vendas v
+                LEFT JOIN clientes c ON c.id = v.cliente_id AND c.empresa_id = v.empresa_id
+                WHERE v.empresa_id = %s
+                ORDER BY v.id DESC
+                LIMIT 30;
                 """,
-                (tabela,),
+                (empresa_id,),
             )
-            tem_emp = cur.fetchone() is not None
-            if tem_emp:
-                cur.execute(f"SELECT COUNT(*) FROM {tabela} WHERE empresa_id = %s;", (int(empresa_id),))
-                row = cur.fetchone()
-                return int(row[0]) if row else 0
-        cur.execute(f"SELECT COUNT(*) FROM {tabela};")
-        row = cur.fetchone()
-        return int(row[0]) if row else 0
-    except Exception:
-        return None
+            vendas_lista = cur.fetchall()
+
+    return render_template(
+        "vendas.html",
+        active_page="vendas",
+        erro_venda=erro_venda,
+        clientes=clientes_lista,
+        produtos=produtos_lista,
+        vendas=vendas_lista,
+    )
 
 
 @app.route("/dashboard")
@@ -794,6 +987,482 @@ try:
     app.register_blueprint(auth_bp)
 except Exception as _auth_err:
     app.logger.warning("Nao foi possivel registrar auth_bp: %s", _auth_err)
+
+
+
+def _empresa_id_seguro(empresa):
+    if isinstance(empresa, dict):
+        val = empresa.get("id")
+        return int(val) if val is not None else None
+    if isinstance(empresa, (tuple, list)) and len(empresa) > 0:
+        return int(empresa[0]) if empresa[0] is not None else None
+    return None
+
+
+def garantir_tabelas_compras_financeiro(conn):
+    garantir_tabelas_base(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS compras (
+                id SERIAL PRIMARY KEY,
+                empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                produto_id INTEGER NOT NULL REFERENCES produtos(id),
+                fornecedor VARCHAR(140),
+                quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+                custo_unitario NUMERIC(12, 2) NOT NULL CHECK (custo_unitario >= 0),
+                valor_total NUMERIC(12, 2) NOT NULL CHECK (valor_total >= 0),
+                forma_pagamento VARCHAR(40) NOT NULL DEFAULT 'Dinheiro',
+                status_pagamento VARCHAR(20) NOT NULL DEFAULT 'Pendente',
+                status VARCHAR(20) NOT NULL DEFAULT 'Concluida',
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_compras_empresa_id
+            ON compras (empresa_id, id DESC);
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lancamentos_financeiros (
+                id SERIAL PRIMARY KEY,
+                empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                tipo VARCHAR(15) NOT NULL CHECK (tipo IN ('entrada', 'saida')),
+                origem VARCHAR(30) NOT NULL DEFAULT 'manual',
+                referencia_id INTEGER,
+                descricao VARCHAR(180) NOT NULL,
+                forma_pagamento VARCHAR(40) NOT NULL DEFAULT 'Dinheiro',
+                valor NUMERIC(12, 2) NOT NULL CHECK (valor >= 0),
+                status VARCHAR(20) NOT NULL DEFAULT 'Pendente' CHECK (status IN ('Pendente', 'Pago', 'Cancelado')),
+                vencimento DATE,
+                pago_em TIMESTAMP,
+                criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_lancamentos_empresa_id
+            ON lancamentos_financeiros (empresa_id, id DESC);
+            """
+        )
+
+
+@app.route("/compras", methods=["GET", "POST"])
+def compras():
+    with get_db_connection() as conn:
+        garantir_tabelas_compras_financeiro(conn)
+        empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+        empresa_id = _empresa_id_seguro(empresa)
+        if not empresa_id:
+            flash("Selecione ou cadastre uma empresa antes de acessar Compras.", "warning")
+            return redirect(url_for("empresas"))
+
+        if request.method == "POST":
+            produto_raw = request.form.get("produto_id", "").strip()
+            qtd_raw = request.form.get("quantidade", "").strip()
+            custo_raw = request.form.get("custo_unitario", "0").strip().replace(",", ".")
+            fornecedor = request.form.get("fornecedor", "").strip() or "Fornecedor nao informado"
+            forma_pagamento = request.form.get("forma_pagamento", "Dinheiro").strip() or "Dinheiro"
+            status_pagamento = request.form.get("status_pagamento", "Pendente").strip()
+            if status_pagamento not in ("Pendente", "Pago"):
+                status_pagamento = "Pendente"
+
+            try:
+                produto_id = int(produto_raw)
+                quantidade = int(qtd_raw)
+                custo_unitario = Decimal(custo_raw).quantize(Decimal("0.01"))
+            except (InvalidOperation, ValueError):
+                produto_id = None
+                quantidade = None
+                custo_unitario = None
+
+            if not produto_id or not quantidade or quantidade <= 0 or custo_unitario is None or custo_unitario < Decimal("0.00"):
+                flash("Informe um produto valido, quantidade maior que zero e custo valido.", "error")
+                return redirect(url_for("compras"))
+
+            valor_total = (custo_unitario * Decimal(quantidade)).quantize(Decimal("0.01"))
+            pago_em_sql = "CURRENT_TIMESTAMP" if status_pagamento == "Pago" else "NULL"
+
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id, nome FROM produtos WHERE id = %s AND empresa_id = %s FOR UPDATE;",
+                        (produto_id, empresa_id),
+                    )
+                    prod = cur.fetchone()
+                    if not prod:
+                        flash("Produto nao encontrado para a empresa ativa.", "error")
+                        return redirect(url_for("compras"))
+
+                    nome_produto = prod[1]
+
+                    cur.execute(
+                        """
+                        INSERT INTO compras (
+                            empresa_id, produto_id, fornecedor, quantidade,
+                            custo_unitario, valor_total, forma_pagamento,
+                            status_pagamento, status
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Concluida')
+                        RETURNING id;
+                        """,
+                        (
+                            empresa_id,
+                            produto_id,
+                            fornecedor,
+                            quantidade,
+                            custo_unitario,
+                            valor_total,
+                            forma_pagamento,
+                            status_pagamento,
+                        ),
+                    )
+                    compra_id = cur.fetchone()[0]
+
+                    cur.execute(
+                        """
+                        UPDATE produtos
+                        SET estoque = estoque + %s
+                        WHERE id = %s AND empresa_id = %s;
+                        """,
+                        (quantidade, produto_id, empresa_id),
+                    )
+
+                    cur.execute(
+                        f"""
+                        INSERT INTO lancamentos_financeiros (
+                            empresa_id, tipo, origem, referencia_id,
+                            descricao, forma_pagamento, valor, status, pago_em
+                        )
+                        VALUES (%s, 'saida', 'compra', %s, %s, %s, %s, %s, {pago_em_sql});
+                        """,
+                        (
+                            empresa_id,
+                            compra_id,
+                            f"Compra #{compra_id} - {nome_produto} ({quantidade}x)",
+                            forma_pagamento,
+                            valor_total,
+                            status_pagamento,
+                        ),
+                    )
+
+                conn.commit()
+                flash(f"Compra #{compra_id} registrada: +{quantidade} un. em {nome_produto}.", "success")
+            except Exception as exc:
+                conn.rollback()
+                flash(f"Erro ao registrar compra: {exc}", "error")
+
+            return redirect(url_for("compras"))
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, nome, estoque FROM produtos WHERE empresa_id = %s ORDER BY nome ASC;",
+                (empresa_id,),
+            )
+            produtos_lista = cur.fetchall()
+
+            cur.execute(
+                """
+                SELECT
+                    c.id,
+                    c.criado_em,
+                    p.nome,
+                    c.fornecedor,
+                    c.quantidade,
+                    c.custo_unitario,
+                    c.valor_total,
+                    c.forma_pagamento,
+                    c.status_pagamento,
+                    c.status
+                FROM compras c
+                JOIN produtos p ON p.id = c.produto_id AND p.empresa_id = c.empresa_id
+                WHERE c.empresa_id = %s
+                ORDER BY c.id DESC;
+                """,
+                (empresa_id,),
+            )
+            compras_lista = cur.fetchall()
+
+    return render_template(
+        "compras.html",
+        active_page="compras",
+        produtos=produtos_lista,
+        compras=compras_lista,
+    )
+
+
+@app.route("/compras/<int:compra_id>/cancelar", methods=["POST"])
+def cancelar_compra(compra_id):
+    with get_db_connection() as conn:
+        garantir_tabelas_compras_financeiro(conn)
+        empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+        empresa_id = _empresa_id_seguro(empresa)
+        if not empresa_id:
+            flash("Selecione ou cadastre uma empresa antes de continuar.", "warning")
+            return redirect(url_for("empresas"))
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, produto_id, quantidade, status
+                    FROM compras
+                    WHERE id = %s AND empresa_id = %s
+                    FOR UPDATE;
+                    """,
+                    (compra_id, empresa_id),
+                )
+                compra = cur.fetchone()
+                if not compra:
+                    flash("Compra nao encontrada para a empresa ativa.", "error")
+                    return redirect(url_for("compras"))
+
+                if compra[3] == "Cancelada":
+                    flash("Esta compra ja esta cancelada.", "warning")
+                    return redirect(url_for("compras"))
+
+                produto_id = compra[1]
+                qtd_compra = int(compra[2])
+
+                cur.execute(
+                    "SELECT estoque, nome FROM produtos WHERE id = %s AND empresa_id = %s FOR UPDATE;",
+                    (produto_id, empresa_id),
+                )
+                prod = cur.fetchone()
+                if not prod or int(prod[0]) < qtd_compra:
+                    flash(
+                        "Nao e possivel estornar: o estoque atual do produto e menor que a quantidade comprada.",
+                        "error",
+                    )
+                    conn.rollback()
+                    return redirect(url_for("compras"))
+
+                cur.execute(
+                    "UPDATE produtos SET estoque = estoque - %s WHERE id = %s AND empresa_id = %s;",
+                    (qtd_compra, produto_id, empresa_id),
+                )
+                cur.execute(
+                    "UPDATE compras SET status = 'Cancelada' WHERE id = %s AND empresa_id = %s;",
+                    (compra_id, empresa_id),
+                )
+                cur.execute(
+                    """
+                    UPDATE lancamentos_financeiros
+                    SET status = 'Cancelado'
+                    WHERE empresa_id = %s AND origem = 'compra' AND referencia_id = %s AND status != 'Cancelado';
+                    """,
+                    (empresa_id, compra_id),
+                )
+
+            conn.commit()
+            flash(f"Compra #{compra_id} cancelada e estoque estornado (-{qtd_compra} un.).", "success")
+        except Exception as exc:
+            conn.rollback()
+            flash(f"Erro ao cancelar compra: {exc}", "error")
+
+    return redirect(url_for("compras"))
+
+
+@app.route("/financeiro", methods=["GET", "POST"])
+def financeiro():
+    with get_db_connection() as conn:
+        garantir_tabelas_compras_financeiro(conn)
+        empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+        empresa_id = _empresa_id_seguro(empresa)
+        if not empresa_id:
+            flash("Selecione ou cadastre uma empresa antes de acessar o Financeiro.", "warning")
+            return redirect(url_for("empresas"))
+
+        if request.method == "POST":
+            acao = request.form.get("acao", "criar").strip()
+
+            if acao == "baixar":
+                lanc_id_raw = request.form.get("lancamento_id", "").strip()
+                try:
+                    lanc_id = int(lanc_id_raw)
+                except ValueError:
+                    lanc_id = None
+
+                if lanc_id:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE lancamentos_financeiros
+                            SET status = 'Pago', pago_em = COALESCE(pago_em, CURRENT_TIMESTAMP)
+                            WHERE id = %s AND empresa_id = %s AND status = 'Pendente';
+                            """,
+                            (lanc_id, empresa_id),
+                        )
+                        afetados = cur.rowcount
+                    conn.commit()
+                    if afetados:
+                        flash(f"Lancamento #{lanc_id} marcado como Pago.", "success")
+                    else:
+                        flash("Lancamento nao encontrado ou ja baixado/cancelado.", "warning")
+                return redirect(url_for("financeiro"))
+
+            tipo = request.form.get("tipo", "saida").strip()
+            descricao = request.form.get("descricao", "").strip()
+            forma_pagamento = request.form.get("forma_pagamento", "Dinheiro").strip() or "Dinheiro"
+            status = request.form.get("status", "Pendente").strip()
+            valor_raw = request.form.get("valor", "0").strip().replace(",", ".")
+            vencimento_raw = request.form.get("vencimento", "").strip() or None
+
+            if tipo not in ("entrada", "saida"):
+                tipo = "saida"
+            if status not in ("Pendente", "Pago"):
+                status = "Pendente"
+
+            try:
+                valor = Decimal(valor_raw).quantize(Decimal("0.01"))
+            except InvalidOperation:
+                valor = None
+
+            if not descricao or valor is None or valor <= Decimal("0.00"):
+                flash("Informe descricao e valor maior que zero para o lancamento.", "error")
+                return redirect(url_for("financeiro"))
+
+            pago_em_sql = "CURRENT_TIMESTAMP" if status == "Pago" else "NULL"
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO lancamentos_financeiros (
+                        empresa_id, tipo, origem, descricao, forma_pagamento,
+                        valor, status, vencimento, pago_em
+                    )
+                    VALUES (%s, %s, 'manual', %s, %s, %s, %s, %s, {pago_em_sql});
+                    """,
+                    (
+                        empresa_id,
+                        tipo,
+                        descricao,
+                        forma_pagamento,
+                        valor,
+                        status,
+                        vencimento_raw,
+                    ),
+                )
+            conn.commit()
+            flash("Lancamento financeiro registrado com sucesso.", "success")
+            return redirect(url_for("financeiro"))
+
+        resumo = {
+            "total_avista": Decimal("0.00"),
+            "qtd_vendas": 0,
+            "ticket_medio": Decimal("0.00"),
+            "a_receber": Decimal("0.00"),
+            "a_pagar": Decimal("0.00"),
+            "saldo_caixa": Decimal("0.00"),
+        }
+        por_pagamento = []
+        historico = []
+        lancamentos = []
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN tipo = 'entrada' AND status = 'Pago' THEN valor ELSE 0 END), 0)
+                    - COALESCE(SUM(CASE WHEN tipo = 'saida' AND status = 'Pago' THEN valor ELSE 0 END), 0) AS saldo_caixa,
+                    COALESCE(SUM(CASE WHEN tipo = 'entrada' AND status = 'Pendente' THEN valor ELSE 0 END), 0) AS a_receber,
+                    COALESCE(SUM(CASE WHEN tipo = 'saida' AND status = 'Pendente' THEN valor ELSE 0 END), 0) AS a_pagar
+                FROM lancamentos_financeiros
+                WHERE empresa_id = %s AND status != 'Cancelado';
+                """,
+                (empresa_id,),
+            )
+            fin_row = cur.fetchone()
+            if fin_row:
+                resumo["saldo_caixa"] = Decimal(str(fin_row[0] or 0))
+                resumo["a_receber"] = Decimal(str(fin_row[1] or 0))
+                resumo["a_pagar"] = Decimal(str(fin_row[2] or 0))
+
+            cur.execute(
+                """
+                SELECT
+                    id, criado_em, tipo, origem, descricao,
+                    forma_pagamento, valor, status, vencimento
+                FROM lancamentos_financeiros
+                WHERE empresa_id = %s
+                ORDER BY id DESC;
+                """,
+                (empresa_id,),
+            )
+            lancamentos = cur.fetchall()
+
+            cur.execute("SELECT to_regclass('public.vendas');")
+            tem_vendas = cur.fetchone()[0] is not None
+            if tem_vendas:
+                cur.execute(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'vendas';
+                    """
+                )
+                cols_vendas = {r[0] for r in cur.fetchall()}
+                if "empresa_id" in cols_vendas:
+                    valor_col = "total" if "total" in cols_vendas else ("valor_total" if "valor_total" in cols_vendas else None)
+                    pag_col = "forma_pagamento" if "forma_pagamento" in cols_vendas else None
+                    data_col = "criado_em" if "criado_em" in cols_vendas else ("data" if "data" in cols_vendas else None)
+
+                    if valor_col:
+                        cur.execute(
+                            f"""
+                            SELECT COUNT(*), COALESCE(SUM({valor_col}), 0)
+                            FROM vendas
+                            WHERE empresa_id = %s;
+                            """,
+                            (empresa_id,),
+                        )
+                        v_res = cur.fetchone()
+                        qtd = int(v_res[0] or 0)
+                        tot = Decimal(str(v_res[1] or 0))
+                        resumo["qtd_vendas"] = qtd
+                        resumo["total_avista"] = tot
+                        resumo["ticket_medio"] = (tot / Decimal(qtd)).quantize(Decimal("0.01")) if qtd > 0 else Decimal("0.00")
+
+                        if pag_col:
+                            cur.execute(
+                                f"""
+                                SELECT COALESCE({pag_col}, 'Nao informado'), COUNT(*), COALESCE(SUM({valor_col}), 0)
+                                FROM vendas
+                                WHERE empresa_id = %s
+                                GROUP BY COALESCE({pag_col}, 'Nao informado')
+                                ORDER BY 3 DESC;
+                                """,
+                                (empresa_id,),
+                            )
+                            por_pagamento = cur.fetchall()
+
+                        order_expr = f"{data_col} DESC NULLS LAST, id DESC" if data_col else "id DESC"
+                        dt_expr = data_col if data_col else "NULL"
+                        pg_expr = pag_col if pag_col else "'Nao informado'"
+                        cur.execute(
+                            f"""
+                            SELECT id, {dt_expr}, 'Consumidor final', '-', {pg_expr}, {valor_col}
+                            FROM vendas
+                            WHERE empresa_id = %s
+                            ORDER BY {order_expr}
+                            LIMIT 50;
+                            """,
+                            (empresa_id,),
+                        )
+                        historico = cur.fetchall()
+
+    return render_template(
+        "financeiro.html",
+        active_page="financeiro",
+        resumo=resumo,
+        por_pagamento=por_pagamento,
+        historico=historico,
+        lancamentos=lancamentos,
+    )
+
 
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")
