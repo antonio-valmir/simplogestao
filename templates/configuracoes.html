@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Configurações — SimploGestão{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Configurações</h1>
+    <p>Preferências da empresa ativa e informações gerais do sistema.</p>
+  </div>
+</div>
+
+<section class="card" style="margin-bottom:20px;">
+  <h2>Preferências Operacionais</h2>
+  <p style="margin-bottom:14px;color:#555;">
+    Empresa ativa: <strong>{{ empresa_ativa.nome if empresa_ativa and empresa_ativa.nome else "Nenhuma selecionada" }}</strong>
+  </p>
+  <form method="post" action="{{ url_for('configuracoes') }}" class="form-stack">
+    <div class="form-group">
+      <label for="alerta_estoque_min">Limite de referência de estoque baixo</label>
+      <input id="alerta_estoque_min" name="alerta_estoque_min" type="number" min="1" max="1000" value="{{ alerta_estoque_min }}" style="max-width:160px;">
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+      <button type="submit" class="btn-primary">Salvar configuração</button>
+      <a href="{{ url_for('empresas') }}" class="btn-primary" style="text-decoration:none;opacity:0.85;">Gerenciar Empresas</a>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Sobre o SimploGestão</h3>
+  <p>Sistema de gestão comercial com isolamento por empresa (<code>empresa_id</code>), controle de estoque, compras, vendas e financeiro.</p>
+</section>
+{% endblock %}

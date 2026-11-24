@@ -1836,6 +1836,36 @@ def injetar_notificacoes_estoque():
     }
 
 
+@app.route("/configuracoes", methods=["GET", "POST"])
+def configuracoes():
+    empresa = None
+    try:
+        with get_db_connection() as conn:
+            garantir_tabelas_base(conn)
+            empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+    except Exception as exc:
+        flash(f"Não foi possível carregar os dados da empresa: {exc}", "warning")
+
+    if request.method == "POST":
+        alerta_raw = (request.form.get("alerta_estoque_min") or "5").strip()
+        try:
+            alerta_num = int(alerta_raw)
+            if alerta_num < 1 or alerta_num > 1000:
+                raise ValueError()
+            session["alerta_estoque_min"] = alerta_num
+            flash(f"Preferência salva: limite de referência em {alerta_num} unidade(s).", "success")
+        except ValueError:
+            flash("Informe um número entre 1 e 1000.", "warning")
+        return redirect(url_for("configuracoes"))
+
+    return render_template(
+        "configuracoes.html",
+        pagina="configuracoes",
+        empresa_ativa=empresa,
+        alerta_estoque_min=session.get("alerta_estoque_min", 5),
+    )
+
+
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")
     port = int(os.getenv("FLASK_PORT", "5000"))
