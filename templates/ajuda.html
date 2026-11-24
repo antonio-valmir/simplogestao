@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Ajuda — SimploGestão{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Central de Ajuda</h1>
+    <p>Orientações rápidas para operar o sistema no dia a dia com segurança.</p>
+  </div>
+</div>
+
+<section class="card" style="margin-bottom:20px;">
+  <h2>Fluxo Principal de Uso</h2>
+  <ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;line-height:1.5;">
+    <li><strong>Empresa ativa:</strong> selecione ou autentique a empresa em <em>Empresas</em> para isolar os registros por <code>empresa_id</code>.</li>
+    <li><strong>Produtos e clientes:</strong> cadastre itens com preço e estoque inicial, e registre seus clientes antes ou durante o atendimento.</li>
+    <li><strong>Vendas e compras:</strong> registre vendas com baixa automática de estoque e compras para repor quantidades e gerar lançamentos.</li>
+    <li><strong>Painel e financeiro:</strong> acompanhe indicadores, movimentações e alertas de estoque baixo no sistema.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h3>Dicas Rápidas e Atalhos</h3>
+  <p style="margin-bottom:12px;color:#555;">
+    Se o visual parecer desatualizado após alguma mudança, pressione <strong>Ctrl + Shift + R</strong> no navegador para limpar o cache da página.
+  </p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <a href="{{ url_for('dashboard') }}" class="btn-primary" style="text-decoration:none;">Ir para o Painel</a>
+    <a href="{{ url_for('vendas') }}" class="btn-primary" style="text-decoration:none;opacity:0.9;">Nova Venda</a>
+    <a href="{{ url_for('configuracoes') }}" class="btn-primary" style="text-decoration:none;opacity:0.85;">Configurações</a>
+  </div>
+</section>
+{% endblock %}

@@ -1866,6 +1866,23 @@ def configuracoes():
     )
 
 
+@app.route("/ajuda")
+def ajuda():
+    empresa = None
+    try:
+        with get_db_connection() as conn:
+            garantir_tabelas_base(conn)
+            empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+    except Exception as exc:
+        flash(f"Não foi possível carregar os dados da empresa: {exc}", "warning")
+
+    return render_template(
+        "ajuda.html",
+        pagina="ajuda",
+        empresa_ativa=empresa,
+    )
+
+
 if __name__ == "__main__":
     host = os.getenv("FLASK_HOST", "0.0.0.0")
     port = int(os.getenv("FLASK_PORT", "5000"))
