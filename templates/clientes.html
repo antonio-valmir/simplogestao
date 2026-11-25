@@ -140,4 +140,100 @@
     </div>
   </section>
 </div>
+
+<script>
+(function() {
+  function formatarCep(valor) {
+    const digitos = (valor || "").replace(/\D/g, "").slice(0, 8);
+    if (digitos.length > 5) {
+      return digitos.slice(0, 5) + "-" + digitos.slice(5);
+    }
+    return digitos;
+  }
+
+  function configurarBuscaCep(cepId, enderecoId) {
+    const cepInput = document.getElementById(cepId);
+    const enderecoInput = document.getElementById(enderecoId);
+    if (!cepInput || !enderecoInput) return;
+
+    const statusEl = document.createElement("small");
+    statusEl.style.display = "block";
+    statusEl.style.marginTop = "4px";
+    statusEl.style.fontSize = "12px";
+    statusEl.style.color = "var(--text-muted, #64748b)";
+    cepInput.insertAdjacentElement("afterend", statusEl);
+
+    let ultimoCepBuscado = "";
+    let controller = null;
+
+    async function consultarCep() {
+      const digitos = cepInput.value.replace(/\D/g, "");
+      if (digitos.length !== 8 || digitos === ultimoCepBuscado) return;
+
+      ultimoCepBuscado = digitos;
+      if (controller) controller.abort();
+      controller = new AbortController();
+
+      statusEl.style.color = "var(--text-muted, #64748b)";
+      statusEl.textContent = "Buscando endereço pelo CEP...";
+
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${digitos}/json/`, {
+          signal: controller.signal
+        });
+        if (!resp.ok) throw new Error("Falha HTTP");
+        const dados = await resp.json();
+
+        if (dados.erro) {
+          statusEl.style.color = "#b91c1c";
+          statusEl.textContent = "CEP não encontrado. Preencha o endereço manualmente.";
+          return;
+        }
+
+        const partes = [];
+        if (dados.logradouro) partes.push(dados.logradouro.trim());
+        if (dados.bairro) partes.push(dados.bairro.trim());
+        const cidadeUf = [dados.localidade, dados.uf].filter(Boolean).join("/");
+        if (cidadeUf) partes.push(cidadeUf);
+
+        const enderecoMontado = partes.join(", ");
+        if (enderecoMontado) {
+          enderecoInput.value = enderecoMontado;
+          enderecoInput.focus();
+          if (dados.logradouro) {
+            const posNumero = dados.logradouro.trim().length;
+            enderecoInput.setSelectionRange(posNumero, posNumero);
+          }
+        }
+
+        statusEl.style.color = "#15803d";
+        statusEl.textContent = "Endereço preenchido automaticamente.";
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        statusEl.style.color = "#b45309";
+        statusEl.textContent = "Não foi possível consultar o CEP agora.";
+      }
+    }
+
+    cepInput.addEventListener("input", function() {
+      const formatado = formatarCep(cepInput.value);
+      if (cepInput.value !== formatado) {
+        cepInput.value = formatado;
+      }
+      const digitos = formatado.replace(/\D/g, "");
+      if (digitos.length < 8) {
+        ultimoCepBuscado = "";
+        statusEl.textContent = "";
+      } else if (digitos.length === 8) {
+        consultarCep();
+      }
+    });
+
+    cepInput.addEventListener("blur", consultarCep);
+  }
+
+  configurarBuscaCep("cep", "endereco");
+  configurarBuscaCep("edit_cep", "edit_endereco");
+})();
+</script>
 {% endblock %}
