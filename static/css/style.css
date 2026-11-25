@@ -649,3 +649,47 @@ a.btn {
   font-weight: 700;
   line-height: 1.25;
 }
+.repor-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.repor-input {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid #d5dfed;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-main);
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.repor-input:focus {
+  border-color: var(--blue-primary);
+  box-shadow: 0 0 0 3px rgba(27, 110, 243, 0.14);
+}
+
+.btn-repor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--blue-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-repor:hover {
+  background: var(--blue-dark);
+}

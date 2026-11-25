@@ -390,6 +390,47 @@ def clientes():
     )
 
 
+@app.route("/produtos/<int:produto_id>/repor", methods=["POST"])
+def repor_produto(produto_id):
+    with get_db_connection() as conn:
+        empresa = get_empresa_ativa(conn, session.get("empresa_id"))
+        if not empresa:
+            flash("Selecione ou cadastre uma empresa antes de acessar esta area.", "warning")
+            return redirect(url_for("empresas"))
+        empresa_id = empresa[0]
+
+        qtd_raw = (request.form.get("quantidade") or "").strip()
+        try:
+            qtd = int(qtd_raw)
+        except ValueError:
+            qtd = None
+
+        if qtd is None or qtd <= 0:
+            flash("Informe uma quantidade valida maior que zero para repor o estoque.", "warning")
+            return redirect(url_for("produtos"))
+
+        garantir_tabelas_base(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE produtos
+                SET estoque = COALESCE(estoque, 0) + %s
+                WHERE id = %s AND empresa_id = %s
+                RETURNING nome, estoque;
+                """,
+                (qtd, produto_id, empresa_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                flash("Mercadoria nao encontrada para a empresa ativa.", "warning")
+                return redirect(url_for("produtos"))
+            conn.commit()
+            nome_prod, novo_estoque = row[0], row[1]
+
+        flash(f"Reposicao registrada: +{qtd} un em {nome_prod} (saldo atual: {novo_estoque} un).", "success")
+        return redirect(url_for("produtos"))
+
+
 @app.route("/produtos", methods=["GET", "POST"])
 def produtos():
     with get_db_connection() as conn:

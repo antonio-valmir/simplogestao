@@ -70,6 +70,7 @@
             <th>Categoria / Tipo</th>
             <th>Preço</th>
             <th>Estoque</th>
+            <th>Repor</th>
           </tr>
         </thead>
         <tbody>
@@ -87,6 +88,12 @@
             </td>
             <td>R$ {{ "%.2f"|format(prod[2]|float) }}</td>
             <td>{{ prod[3] }} un</td>
+            <td>
+              <form method="post" action="{{ url_for('repor_produto', produto_id=prod[0]) }}" class="repor-form">
+                <input type="number" name="quantidade" min="1" step="1" value="1" required aria-label="Quantidade para repor {{ prod[1] }}" class="repor-input">
+                <button type="submit" class="btn-repor">+ Repor</button>
+              </form>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
