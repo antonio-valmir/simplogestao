@@ -3,6 +3,60 @@
 {% block title %}SimploGestão — Clientes{% endblock %}
 
 {% block content %}
+<style>
+  .btn-acao-padrao,
+  a.btn-acao-padrao,
+  button.btn-acao-padrao {
+    height: 30px !important;
+    padding: 0 11px !important;
+    font-family: inherit !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+</style>
+
+<style>
+  .btn-acao-padrao {
+    height: 30px !important;
+    padding: 0 11px !important;
+    font-family: inherit !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+</style>
+
+<style>
+  .btn-acao-cliente {
+    padding: 6px 10px !important;
+    font-family: inherit !important;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    text-decoration: none !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+</style>
+
 <section class="module-hero">
   <div>
     <span class="module-hero-tag">SimploGestão • Clientes</span>
@@ -129,43 +183,47 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th style="width:75px;">ID</th>
             <th>Cliente</th>
-            <th>CPF</th>
-            <th>Contato</th>
-            <th>Endereço / CEP</th>
-            <th style="width:170px;">Ações</th>
+            <th style="width:255px;text-align:right;">Ações</th>
           </tr>
         </thead>
         <tbody>
           {% for c in clientes %}
-          {% set resumo_end = c[6] or ([c[7], c[8], c[9], c[10], c[11]]|select|join(', ')) %}
-          <tr data-search="{{ [c[0], c[1], c[2] or '', c[3] or '', c[4] or '', c[5] or '', resumo_end or '']|join(' ') }}">
-            <td><span class="id-pill">#{{ c[0] }}</span></td>
-            <td><strong>{{ c[1] }}</strong></td>
-            <td>{{ c[2] or "-" }}</td>
-            <td>
-              <div>{{ c[3] or "-" }}</div>
-              {% if c[4] %}<small style="color: var(--text-muted);">{{ c[4] }}</small>{% endif %}
+          {% set c_id = c[0] %}
+          {% set c_nome = c[1] or '' %}
+          {% set c_cpf = c[2] or '' %}
+          {% set c_tel = c[3] or '' %}
+          {% set c_email = c[4] or '' %}
+          {% set c_cep = c[5] or '' %}
+          {% set c_end_legado = c[6] or '' %}
+          {% set c_rua = c[7] or '' %}
+          {% set c_num = c[8] or '' %}
+          {% set c_comp = c[9] or '' %}
+          {% set c_bairro = c[10] or '' %}
+          {% set c_cidade = c[11] or '' %}
+          {% set payload = {'id': c_id, 'nome': c_nome, 'cpf': c_cpf, 'telefone': c_tel, 'email': c_email, 'cep': c_cep, 'rua': c_rua, 'numero': c_num, 'complemento': c_comp, 'bairro': c_bairro, 'cidade': c_cidade, 'legado': c_end_legado} %}
+          <tr data-search="{{ [c_id, c_nome, c_cpf]|join(' ') }}">
+            <td style="vertical-align:middle;"><span class="id-pill">#{{ c_id }}</span></td>
+            <td style="vertical-align:middle;overflow-wrap:anywhere;word-break:break-word;">
+              <strong style="margin-right:10px;">{{ c_nome }}</strong>
+              <span style="color:var(--text-muted);font-size:13px;white-space:nowrap;">{{ c_cpf or "-" }}</span>
             </td>
-            <td>
-              <div>{{ resumo_end or "-" }}</div>
-              {% if c[5] %}<small style="color: var(--text-muted);">CEP: {{ c[5] }}</small>{% endif %}
-            </td>
-            <td>
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:nowrap;">
-                <a href="{{ url_for('clientes', editar=c[0]) }}" class="btn-primary" style="padding:6px 12px;font-size:13px;text-decoration:none;white-space:nowrap;">Editar</a>
-                <form method="POST" action="{{ url_for('clientes') }}" style="display:inline;margin:0;" onsubmit="return confirm('Tem certeza que deseja excluir o cliente {{ c[1] }}?');">
+            <td style="vertical-align:middle;">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;">
+                <button type="button" class="btn-primary js-det-cliente btn-acao-padrao" data-cliente="{{ payload | tojson | forceescape }}">Detalhes</button>
+                <a href="{{ url_for('clientes', editar=c_id) }}" class="btn-primary btn-acao-padrao">Editar</a>
+                <form method="POST" action="{{ url_for('clientes') }}" style="display:inline;margin:0;flex-shrink:0;" onsubmit="return confirm('Tem certeza que deseja excluir o cliente {{ c_nome }}?');">
                   <input type="hidden" name="acao" value="excluir">
-                  <input type="hidden" name="cliente_id" value="{{ c[0] }}">
-                  <button type="submit" class="btn-primary" style="padding:6px 12px;font-size:13px;white-space:nowrap;">Excluir</button>
+                  <input type="hidden" name="cliente_id" value="{{ c_id }}">
+                  <button type="submit" class="btn-primary btn-acao-padrao">Excluir</button>
                 </form>
               </div>
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">
+            <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">
               Nenhum cliente cadastrado ainda.
             </td>
           </tr>
@@ -283,4 +341,65 @@
   });
 })();
 </script>
+
+<div id="modalDetCliente" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;color:#0f172a;width:100%;max-width:620px;border-radius:12px;box-shadow:0 20px 45px rgba(15,23,42,0.25);overflow:hidden;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #e2e8f0;">
+      <div>
+        <small id="mDetId" style="color:#64748b;font-weight:600;"></small>
+        <h3 id="mDetNome" style="margin:2px 0 0 0;font-size:18px;">Detalhes do Cliente</h3>
+      </div>
+      <button type="button" id="mDetFecharX" style="background:none;border:none;font-size:22px;cursor:pointer;color:#475569;padding:4px 8px;">&times;</button>
+    </div>
+    <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">CPF</div><div id="mDetCpf" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">Telefone</div><div id="mDetTel" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">E-mail</div><div id="mDetEmail" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">CEP</div><div id="mDetCep" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">Rua / Logradouro</div><div id="mDetRua" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">Número</div><div id="mDetNum" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">Complemento</div><div id="mDetComp" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">Bairro</div><div id="mDetBairro" style="margin-top:3px;font-size:14px;">-</div></div>
+      <div style="grid-column:1 / -1;"><div style="font-size:11.5px;text-transform:uppercase;color:#64748b;font-weight:600;">Cidade / UF</div><div id="mDetCidade" style="margin-top:3px;font-size:14px;">-</div></div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;">
+      <button type="button" id="mDetFecharBtn" class="btn-primary" style="padding:8px 16px;font-size:13.5px;">Fechar</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const modal = document.getElementById("modalDetCliente");
+  if (!modal) return;
+  const txt = v => (v && String(v).trim()) ? String(v).trim() : "-";
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const fechar = () => modal.style.setProperty("display", "none", "important");
+  document.addEventListener("click", function(e){
+    const btn = e.target.closest(".js-det-cliente");
+    if (!btn) return;
+    e.preventDefault();
+    let d = {};
+    try { d = JSON.parse(btn.getAttribute("data-cliente") || "{}"); } catch(err) {}
+    set("mDetId", d.id ? "#" + d.id : "");
+    set("mDetNome", txt(d.nome));
+    set("mDetCpf", txt(d.cpf));
+    set("mDetTel", txt(d.telefone));
+    set("mDetEmail", txt(d.email));
+    set("mDetCep", txt(d.cep));
+    set("mDetRua", txt(d.rua));
+    set("mDetNum", txt(d.numero));
+    set("mDetComp", (d.complemento && String(d.complemento).trim()) ? String(d.complemento).trim() : "(não informado)");
+    set("mDetBairro", txt(d.bairro));
+    set("mDetCidade", txt(d.cidade));
+    modal.style.setProperty("display", "flex", "important");
+  });
+  const bx = document.getElementById("mDetFecharX");
+  const bb = document.getElementById("mDetFecharBtn");
+  if (bx) bx.addEventListener("click", fechar);
+  if (bb) bb.addEventListener("click", fechar);
+  modal.addEventListener("click", function(e){ if (e.target === modal) fechar(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && modal.style.display === "flex") fechar(); });
+})();
+</script>
+
 {% endblock %}
