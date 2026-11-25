@@ -133,6 +133,25 @@ def _garantir_colunas_empresas():
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS senha_hash VARCHAR(255);")
             cur.execute("ALTER TABLE empresas ADD COLUMN IF NOT EXISTS doc_digits VARCHAR(20);")
+            cur.execute(
+                """
+                ALTER TABLE empresas
+                    ADD COLUMN IF NOT EXISTS nome_fantasia VARCHAR(160),
+                    ADD COLUMN IF NOT EXISTS inscricao_estadual VARCHAR(40),
+                    ADD COLUMN IF NOT EXISTS inscricao_municipal VARCHAR(40),
+                    ADD COLUMN IF NOT EXISTS regime_tributario VARCHAR(60),
+                    ADD COLUMN IF NOT EXISTS telefone VARCHAR(40),
+                    ADD COLUMN IF NOT EXISTS email VARCHAR(140),
+                    ADD COLUMN IF NOT EXISTS responsavel VARCHAR(140),
+                    ADD COLUMN IF NOT EXISTS cep VARCHAR(12),
+                    ADD COLUMN IF NOT EXISTS rua VARCHAR(160),
+                    ADD COLUMN IF NOT EXISTS numero VARCHAR(30),
+                    ADD COLUMN IF NOT EXISTS complemento VARCHAR(120),
+                    ADD COLUMN IF NOT EXISTS bairro VARCHAR(120),
+                    ADD COLUMN IF NOT EXISTS cidade VARCHAR(120),
+                    ADD COLUMN IF NOT EXISTS observacoes TEXT;
+                """
+            )
             cur.execute("SELECT id, nome, documento, senha_hash, doc_digits FROM empresas ORDER BY id ASC;")
             rows = cur.fetchall()
             for emp_id, nome, doc, s_hash, d_dig in rows:
@@ -1194,6 +1213,20 @@ def cadastrar_empresa():
         documento = (request.form.get("documento") or "").strip()
         senha = request.form.get("senha") or ""
         status = (request.form.get("status") or "Ativa").strip()
+        nome_fantasia = (request.form.get("nome_fantasia") or "").strip() or None
+        inscricao_estadual = (request.form.get("inscricao_estadual") or "").strip() or None
+        inscricao_municipal = (request.form.get("inscricao_municipal") or "").strip() or None
+        regime_tributario = (request.form.get("regime_tributario") or "").strip() or None
+        telefone = (request.form.get("telefone") or "").strip() or None
+        email = (request.form.get("email") or "").strip() or None
+        responsavel = (request.form.get("responsavel") or "").strip() or None
+        cep = (request.form.get("cep") or "").strip() or None
+        rua = (request.form.get("rua") or "").strip() or None
+        numero = (request.form.get("numero") or "").strip() or None
+        complemento = (request.form.get("complemento") or "").strip() or None
+        bairro = (request.form.get("bairro") or "").strip() or None
+        cidade = (request.form.get("cidade") or "").strip() or None
+        observacoes = (request.form.get("observacoes") or "").strip() or None
         doc_digits = _somente_digitos(documento)
 
         if not nome:
@@ -1212,11 +1245,21 @@ def cadastrar_empresa():
                         senha_hash = generate_password_hash(senha)
                         cur.execute(
                             """
-                            INSERT INTO empresas (nome, documento, doc_digits, senha_hash, status)
-                            VALUES (%s, %s, %s, %s, %s)
+                            INSERT INTO empresas (
+                                nome, documento, doc_digits, senha_hash, status,
+                                nome_fantasia, inscricao_estadual, inscricao_municipal, regime_tributario,
+                                telefone, email, responsavel,
+                                cep, rua, numero, complemento, bairro, cidade, observacoes
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             RETURNING id;
                             """,
-                            (nome, documento, doc_digits, senha_hash, status),
+                            (
+                                nome, documento, doc_digits, senha_hash, status,
+                                nome_fantasia, inscricao_estadual, inscricao_municipal, regime_tributario,
+                                telefone, email, responsavel,
+                                cep, rua, numero, complemento, bairro, cidade, observacoes,
+                            ),
                         )
                         nova_id = cur.fetchone()[0]
                 conn.commit()
@@ -1289,6 +1332,20 @@ def empresas():
             documento = (request.form.get("documento") or "").strip()
             status = (request.form.get("status") or "Ativa").strip()
             nova_senha = request.form.get("senha") or ""
+            nome_fantasia = (request.form.get("nome_fantasia") or "").strip() or None
+            inscricao_estadual = (request.form.get("inscricao_estadual") or "").strip() or None
+            inscricao_municipal = (request.form.get("inscricao_municipal") or "").strip() or None
+            regime_tributario = (request.form.get("regime_tributario") or "").strip() or None
+            telefone = (request.form.get("telefone") or "").strip() or None
+            email = (request.form.get("email") or "").strip() or None
+            responsavel = (request.form.get("responsavel") or "").strip() or None
+            cep = (request.form.get("cep") or "").strip() or None
+            rua = (request.form.get("rua") or "").strip() or None
+            numero = (request.form.get("numero") or "").strip() or None
+            complemento = (request.form.get("complemento") or "").strip() or None
+            bairro = (request.form.get("bairro") or "").strip() or None
+            cidade = (request.form.get("cidade") or "").strip() or None
+            observacoes = (request.form.get("observacoes") or "").strip() or None
             doc_digits = _somente_digitos(documento)
             empresa_editar_id = emp_id_form
 
@@ -1323,10 +1380,30 @@ def empresas():
                                                documento = %s,
                                                doc_digits = %s,
                                                status = %s,
-                                               senha_hash = %s
+                                               senha_hash = %s,
+                                               nome_fantasia = %s,
+                                               inscricao_estadual = %s,
+                                               inscricao_municipal = %s,
+                                               regime_tributario = %s,
+                                               telefone = %s,
+                                               email = %s,
+                                               responsavel = %s,
+                                               cep = %s,
+                                               rua = %s,
+                                               numero = %s,
+                                               complemento = %s,
+                                               bairro = %s,
+                                               cidade = %s,
+                                               observacoes = %s
                                          WHERE id = %s;
                                         """,
-                                        (nome, documento, doc_digits, status, senha_hash, emp_id_form),
+                                        (
+                                            nome, documento, doc_digits, status, senha_hash,
+                                            nome_fantasia, inscricao_estadual, inscricao_municipal, regime_tributario,
+                                            telefone, email, responsavel,
+                                            cep, rua, numero, complemento, bairro, cidade, observacoes,
+                                            emp_id_form,
+                                        ),
                                     )
                                 else:
                                     cur.execute(
@@ -1335,10 +1412,30 @@ def empresas():
                                            SET nome = %s,
                                                documento = %s,
                                                doc_digits = %s,
-                                               status = %s
+                                               status = %s,
+                                               nome_fantasia = %s,
+                                               inscricao_estadual = %s,
+                                               inscricao_municipal = %s,
+                                               regime_tributario = %s,
+                                               telefone = %s,
+                                               email = %s,
+                                               responsavel = %s,
+                                               cep = %s,
+                                               rua = %s,
+                                               numero = %s,
+                                               complemento = %s,
+                                               bairro = %s,
+                                               cidade = %s,
+                                               observacoes = %s
                                          WHERE id = %s;
                                         """,
-                                        (nome, documento, doc_digits, status, emp_id_form),
+                                        (
+                                            nome, documento, doc_digits, status,
+                                            nome_fantasia, inscricao_estadual, inscricao_municipal, regime_tributario,
+                                            telefone, email, responsavel,
+                                            cep, rua, numero, complemento, bairro, cidade, observacoes,
+                                            emp_id_form,
+                                        ),
                                     )
                     if not erro:
                         conn.commit()
@@ -1409,7 +1506,15 @@ def empresas():
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"SELECT id, nome, documento, doc_digits, status, criado_em FROM empresas WHERE id IN ({placeholders}) ORDER BY id DESC;",
+                    f"""
+                    SELECT id, nome, documento, doc_digits, status, criado_em,
+                           nome_fantasia, inscricao_estadual, inscricao_municipal, regime_tributario,
+                           telefone, email, responsavel,
+                           cep, rua, numero, complemento, bairro, cidade, observacoes
+                      FROM empresas
+                     WHERE id IN ({placeholders})
+                     ORDER BY id DESC;
+                    """,
                     tuple(auth_ids),
                 )
                 lista_empresas = cur.fetchall()
@@ -1421,6 +1526,20 @@ def empresas():
                 "documento": e[2] or e[3] or "",
                 "status": e[4],
                 "criado_em": e[5],
+                "nome_fantasia": e[6] or "",
+                "inscricao_estadual": e[7] or "",
+                "inscricao_municipal": e[8] or "",
+                "regime_tributario": e[9] or "",
+                "telefone": e[10] or "",
+                "email": e[11] or "",
+                "responsavel": e[12] or "",
+                "cep": e[13] or "",
+                "rua": e[14] or "",
+                "numero": e[15] or "",
+                "complemento": e[16] or "",
+                "bairro": e[17] or "",
+                "cidade": e[18] or "",
+                "observacoes": e[19] or "",
                 "autenticada": True,
                 "ativa": empresa_atual_id == e[0],
             }

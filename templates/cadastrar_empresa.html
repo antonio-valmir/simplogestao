@@ -5,7 +5,7 @@
   <div>
     <span class="module-hero-tag">SimploGestão • Empresas</span>
     <h1>Cadastrar Nova Empresa</h1>
-    <p>Cadastre uma empresa com CPF/CNPJ e senha para abrir a seção isolada dela.</p>
+    <p>Cadastre uma empresa com os dados obrigatórios e preencha os atributos adicionais se desejar.</p>
   </div>
   <a href="{{ url_for('empresas') }}" class="btn-primary" style="text-decoration:none;">Ver Minhas Empresas</a>
 </section>
@@ -16,30 +16,113 @@
 </div>
 {% endif %}
 
-<div class="card" style="max-width:640px;">
+<div class="card" style="max-width:780px;">
   <h2>Dados da Empresa</h2>
   <form method="post" action="{{ url_for('cadastrar_empresa') }}" class="form-stack">
     <div class="form-group">
-      <label for="nome">Nome da empresa *</label>
+      <label for="nome">Nome / Razão Social *</label>
       <input type="text" id="nome" name="nome" placeholder="Ex.: Valmir Eletrônica" required>
     </div>
 
-    <div class="form-group">
-      <label for="documento">CPF ou CNPJ *</label>
-      <input type="text" id="documento" name="documento" placeholder="Ex.: 00.000.000/0001-00" required>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="documento">CPF ou CNPJ *</label>
+        <input type="text" id="documento" name="documento" placeholder="Ex.: 00.000.000/0001-00" required>
+      </div>
+      <div class="form-group">
+        <label for="senha">Senha da empresa *</label>
+        <input type="password" id="senha" name="senha" placeholder="Mínimo de 4 caracteres" required>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="nome_fantasia">Nome Fantasia (opcional)</label>
+        <input type="text" id="nome_fantasia" name="nome_fantasia" placeholder="Ex.: Valmir Eletrônica">
+      </div>
+      <div class="form-group">
+        <label for="status">Status (opcional)</label>
+        <select id="status" name="status">
+          <option value="Ativa" selected>Ativa</option>
+          <option value="Inativa">Inativa</option>
+        </select>
+      </div>
+    </div>
+
+    <h3 style="margin-top:8px;">Dados Fiscais (opcionais)</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="inscricao_estadual">Inscrição Estadual</label>
+        <input type="text" id="inscricao_estadual" name="inscricao_estadual" placeholder="Ex.: 19.000.000-0 ou ISENTO">
+      </div>
+      <div class="form-group">
+        <label for="inscricao_municipal">Inscrição Municipal</label>
+        <input type="text" id="inscricao_municipal" name="inscricao_municipal" placeholder="Opcional">
+      </div>
     </div>
 
     <div class="form-group">
-      <label for="senha">Senha da empresa *</label>
-      <input type="password" id="senha" name="senha" placeholder="Mínimo de 4 caracteres" required>
-    </div>
-
-    <div class="form-group">
-      <label for="status">Status</label>
-      <select id="status" name="status">
-        <option value="Ativa" selected>Ativa</option>
-        <option value="Inativa">Inativa</option>
+      <label for="regime_tributario">Regime Tributário</label>
+      <select id="regime_tributario" name="regime_tributario">
+        <option value="">Não informado</option>
+        <option value="Simples Nacional">Simples Nacional</option>
+        <option value="MEI">MEI</option>
+        <option value="Lucro Presumido">Lucro Presumido</option>
+        <option value="Lucro Real">Lucro Real</option>
       </select>
+    </div>
+
+    <h3 style="margin-top:8px;">Contato (opcionais)</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="telefone">Telefone / WhatsApp</label>
+        <input type="text" id="telefone" name="telefone" placeholder="Ex.: (86) 99999-8888">
+      </div>
+      <div class="form-group">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" name="email" placeholder="Ex.: contato@empresa.com.br">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="responsavel">Pessoa de Contato / Responsável</label>
+      <input type="text" id="responsavel" name="responsavel" placeholder="Ex.: Responsável / Gerente">
+    </div>
+
+    <h3 style="margin-top:8px;">Endereço (opcionais)</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="cep">CEP</label>
+        <input type="text" id="cep" name="cep" placeholder="Ex.: 64000-010">
+      </div>
+      <div class="form-group">
+        <label for="rua">Logradouro / Rua</label>
+        <input type="text" id="rua" name="rua" placeholder="Rua / Avenida">
+      </div>
+      <div class="form-group">
+        <label for="numero">Número</label>
+        <input type="text" id="numero" name="numero" placeholder="Ex.: 123 ou S/N">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="complemento">Complemento</label>
+        <input type="text" id="complemento" name="complemento" placeholder="Sala, galpão, bloco">
+      </div>
+      <div class="form-group">
+        <label for="bairro">Bairro</label>
+        <input type="text" id="bairro" name="bairro" placeholder="Bairro">
+      </div>
+      <div class="form-group">
+        <label for="cidade">Cidade / UF</label>
+        <input type="text" id="cidade" name="cidade" placeholder="Ex.: Teresina/PI">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="observacoes">Observações (opcional)</label>
+      <textarea id="observacoes" name="observacoes" rows="3" placeholder="Informações adicionais da empresa..."></textarea>
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;">

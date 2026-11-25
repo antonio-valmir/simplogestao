@@ -44,27 +44,101 @@
 {% if not empresa_para_login and empresa_para_editar %}
 <section class="card" style="margin-bottom:20px;">
   <h2>Editar Empresa — {{ empresa_para_editar.nome }}</h2>
-  <form method="post" action="{{ url_for('empresas') }}">
+  <form method="post" action="{{ url_for('empresas') }}" class="form-stack">
     <input type="hidden" name="acao" value="editar">
     <input type="hidden" name="empresa_id" value="{{ empresa_para_editar.id }}">
     <div class="form-group">
-      <label for="edit_nome">Nome da Empresa *</label>
+      <label for="edit_nome">Nome / Razão Social *</label>
       <input type="text" id="edit_nome" name="nome" value="{{ empresa_para_editar.nome }}" required>
     </div>
-    <div class="form-group">
-      <label for="edit_documento">CPF ou CNPJ *</label>
-      <input type="text" id="edit_documento" name="documento" value="{{ empresa_para_editar.documento }}" required>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit_documento">CPF ou CNPJ *</label>
+        <input type="text" id="edit_documento" name="documento" value="{{ empresa_para_editar.documento }}" required>
+      </div>
+      <div class="form-group">
+        <label for="edit_senha">Nova Senha (opcional)</label>
+        <input type="password" id="edit_senha" name="senha" placeholder="Deixe em branco para manter a senha atual">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit_nome_fantasia">Nome Fantasia (opcional)</label>
+        <input type="text" id="edit_nome_fantasia" name="nome_fantasia" value="{{ empresa_para_editar.nome_fantasia }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_status">Status (opcional)</label>
+        <select id="edit_status" name="status">
+          <option value="Ativa" {{ 'selected' if empresa_para_editar.status == 'Ativa' else '' }}>Ativa</option>
+          <option value="Inativa" {{ 'selected' if empresa_para_editar.status == 'Inativa' else '' }}>Inativa</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit_ie">Inscrição Estadual (opcional)</label>
+        <input type="text" id="edit_ie" name="inscricao_estadual" value="{{ empresa_para_editar.inscricao_estadual }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_im">Inscrição Municipal (opcional)</label>
+        <input type="text" id="edit_im" name="inscricao_municipal" value="{{ empresa_para_editar.inscricao_municipal }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_regime">Regime Tributário (opcional)</label>
+        <select id="edit_regime" name="regime_tributario">
+          <option value="" {{ 'selected' if not empresa_para_editar.regime_tributario else '' }}>Não informado</option>
+          <option value="Simples Nacional" {{ 'selected' if empresa_para_editar.regime_tributario == 'Simples Nacional' else '' }}>Simples Nacional</option>
+          <option value="MEI" {{ 'selected' if empresa_para_editar.regime_tributario == 'MEI' else '' }}>MEI</option>
+          <option value="Lucro Presumido" {{ 'selected' if empresa_para_editar.regime_tributario == 'Lucro Presumido' else '' }}>Lucro Presumido</option>
+          <option value="Lucro Real" {{ 'selected' if empresa_para_editar.regime_tributario == 'Lucro Real' else '' }}>Lucro Real</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit_telefone">Telefone / WhatsApp (opcional)</label>
+        <input type="text" id="edit_telefone" name="telefone" value="{{ empresa_para_editar.telefone }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_email">E-mail (opcional)</label>
+        <input type="email" id="edit_email" name="email" value="{{ empresa_para_editar.email }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_responsavel">Responsável (opcional)</label>
+        <input type="text" id="edit_responsavel" name="responsavel" value="{{ empresa_para_editar.responsavel }}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit_cep">CEP (opcional)</label>
+        <input type="text" id="edit_cep" name="cep" value="{{ empresa_para_editar.cep }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_rua">Logradouro / Rua (opcional)</label>
+        <input type="text" id="edit_rua" name="rua" value="{{ empresa_para_editar.rua }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_numero">Número (opcional)</label>
+        <input type="text" id="edit_numero" name="numero" value="{{ empresa_para_editar.numero }}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="edit_complemento">Complemento (opcional)</label>
+        <input type="text" id="edit_complemento" name="complemento" value="{{ empresa_para_editar.complemento }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_bairro">Bairro (opcional)</label>
+        <input type="text" id="edit_bairro" name="bairro" value="{{ empresa_para_editar.bairro }}">
+      </div>
+      <div class="form-group">
+        <label for="edit_cidade">Cidade / UF (opcional)</label>
+        <input type="text" id="edit_cidade" name="cidade" value="{{ empresa_para_editar.cidade }}">
+      </div>
     </div>
     <div class="form-group">
-      <label for="edit_status">Status</label>
-      <select id="edit_status" name="status">
-        <option value="Ativa" {{ 'selected' if empresa_para_editar.status == 'Ativa' else '' }}>Ativa</option>
-        <option value="Inativa" {{ 'selected' if empresa_para_editar.status == 'Inativa' else '' }}>Inativa</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="edit_senha">Nova Senha (opcional)</label>
-      <input type="password" id="edit_senha" name="senha" placeholder="Deixe em branco para manter a senha atual">
+      <label for="edit_obs">Observações (opcional)</label>
+      <textarea id="edit_obs" name="observacoes" rows="2">{{ empresa_para_editar.observacoes }}</textarea>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <button type="submit" class="btn-primary">Salvar</button>
