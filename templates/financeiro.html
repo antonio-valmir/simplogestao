@@ -73,7 +73,7 @@
   <p class="muted" style="margin-bottom:14px;">Lançamentos da empresa ativa com isolamento por empresa.</p>
 
   {% if historico %}
-  <div class="table-wrap">
+  <div class="table-wrap" id="financeiro-historico-wrap">
     <table class="data-table">
       <thead>
         <tr>
@@ -226,4 +226,25 @@
   </div>
   {% endif %}
 </section>
+<script>
+(function() {
+  const LIMITE = 10;
+  const wrapper = document.getElementById("financeiro-historico-wrap");
+  const tbody = wrapper ? wrapper.querySelector("tbody") : null;
+  if (!wrapper || !tbody) return;
+
+  function atualizarRolagemFinanceiro() {
+    const linhas = Array.from(tbody.querySelectorAll("tr")).filter(function(tr) {
+      return !tr.dataset.emptyFilterRow && tr.style.display !== "none" && !tr.hidden;
+    });
+    if (linhas.length >= LIMITE) {
+      wrapper.classList.add("scroll-limite-10");
+    } else {
+      wrapper.classList.remove("scroll-limite-10");
+    }
+  }
+
+  atualizarRolagemFinanceiro();
+})();
+</script>
 {% endblock %}
