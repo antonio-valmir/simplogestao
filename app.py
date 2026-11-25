@@ -155,6 +155,24 @@ def get_empresa_ativa(conn, empresa_id=None):
 
 
 
+def _formatar_empresa_ctx(emp):
+    if not emp:
+        return None
+    if isinstance(emp, dict):
+        return {
+            "id": emp.get("id"),
+            "nome": emp.get("nome") or "Empresa",
+            "documento": emp.get("documento") or "",
+            "status": emp.get("status") or "Conectada",
+        }
+    return {
+        "id": emp[0] if len(emp) > 0 else None,
+        "nome": emp[1] if len(emp) > 1 and emp[1] else "Empresa",
+        "documento": (emp[2] if len(emp) > 2 and emp[2] else ""),
+        "status": emp[3] if len(emp) > 3 and emp[3] else "Conectada",
+    }
+
+
 @app.context_processor
 def inject_globals():
     def safe_url(endpoint, fallback="#"):
@@ -166,21 +184,24 @@ def inject_globals():
     try:
         with get_db_connection() as conn:
             emp = get_empresa_ativa(conn, session.get("empresa_id"))
-            if emp:
-                empresa_info = {
-                    "id": emp[0],
-                    "nome": emp[1],
-                    "documento": emp[2] or "",
-                    "status": emp[3],
-                }
+            empresa_info = _formatar_empresa_ctx(emp)
+            if empresa_info and empresa_info.get("nome"):
+                session["empresa_nome"] = empresa_info["nome"]
     except Exception:
         empresa_info = None
+
+    if not empresa_info and session.get("empresa_id") and session.get("empresa_nome"):
+        empresa_info = {
+            "id": session.get("empresa_id"),
+            "nome": session.get("empresa_nome"),
+            "documento": "",
+            "status": "Conectada",
+        }
 
     return {
         "safe_url": safe_url,
         "empresa_ativa": empresa_info,
     }
-
 
 @app.route("/")
 def index():
@@ -633,7 +654,7 @@ def comprovante_venda(venda_id):
         "comprovante_venda.html",
         venda=venda,
         itens=itens,
-        empresa_ativa=empresa,
+        empresa_ativa=_formatar_empresa_ctx(empresa),
     )
 
 @app.route("/vendas", methods=["GET", "POST"])
@@ -1103,7 +1124,7 @@ def dashboard():
 
     return render_template(
         "dashboard.html",
-        empresa_ativa=empresa,
+        empresa_ativa=_formatar_empresa_ctx(empresa),
         usuario_logado=usuario_logado,
         data_atual=hoje.strftime("%d/%m/%Y"),
         kpis=kpis,
@@ -1910,7 +1931,7 @@ def configuracoes():
     return render_template(
         "configuracoes.html",
         pagina="configuracoes",
-        empresa_ativa=empresa,
+        empresa_ativa=_formatar_empresa_ctx(empresa),
         alerta_estoque_min=session.get("alerta_estoque_min", 5),
     )
 
@@ -1928,7 +1949,7 @@ def ajuda():
     return render_template(
         "ajuda.html",
         pagina="ajuda",
-        empresa_ativa=empresa,
+        empresa_ativa=_formatar_empresa_ctx(empresa),
     )
 
 
