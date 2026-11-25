@@ -57,7 +57,10 @@
 
   <section class="card">
     <h2>Mercadorias Cadastradas</h2>
-    <p class="muted" style="margin-bottom:14px;">Registros vinculados à empresa ativa.</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+      <p class="muted" style="margin:0;">Registros vinculados à empresa ativa.</p>
+      <input type="search" id="localSearchInput" placeholder="Buscar produto por nome, código, categoria ou tipo..." aria-label="Buscar produto" style="min-width:260px;max-width:360px;flex:1;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:13.5px;">
+    </div>
 
     {% if produtos %}
     <div class="table-wrap">
@@ -75,7 +78,7 @@
         </thead>
         <tbody>
           {% for prod in produtos %}
-          <tr>
+          <tr data-search="{{ [prod[0], prod[1], prod[4] or '', prod[5] or '', prod[6] or '', prod[2], prod[3]]|join(' ') }}">
             <td><span class="id-pill">#{{ prod[0] }}</span></td>
             <td><strong>{{ prod[1] }}</strong></td>
             <td>{{ prod[4] or '—' }}</td>

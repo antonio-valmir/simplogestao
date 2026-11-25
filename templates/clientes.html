@@ -87,7 +87,10 @@
   </section>
 
   <section class="card">
-    <h2>Clientes Cadastrados</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+      <h2 style="margin:0;">Clientes Cadastrados</h2>
+      <input type="search" id="localSearchInput" placeholder="Buscar cliente por nome, CPF, telefone, e-mail..." aria-label="Buscar cliente" style="min-width:260px;max-width:360px;flex:1;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:13.5px;">
+    </div>
     <div class="table-responsive">
       <table class="data-table">
         <thead>
@@ -102,7 +105,7 @@
         </thead>
         <tbody>
           {% for c in clientes %}
-          <tr>
+          <tr data-search="{{ [c[0], c[1], c[2] or '', c[3] or '', c[4] or '', c[5] or '', c[6] or '']|join(' ') }}">
             <td><span class="id-pill">#{{ c[0] }}</span></td>
             <td><strong>{{ c[1] }}</strong></td>
             <td>{{ c[2] or "-" }}</td>
