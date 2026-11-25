@@ -165,10 +165,24 @@
               {% endif %}
             </div>
           </div>
-          <div class="user-chip">
-            <div class="user-chip-avatar">👤</div>
-            <span>{{ usuario.nome }}</span>
-            <span style="font-size: 10px; color: var(--text-muted);">⌄</span>
+          <div style="position: relative;">
+            <button type="button" class="user-chip" id="btnUserMenu" aria-expanded="false" aria-controls="painelUserMenu" style="cursor: pointer; background: inherit; border: 1px solid var(--border-color, #e2e8f0); font-family: inherit;">
+              <div class="user-chip-avatar">👤</div>
+              <span>{{ usuario.nome }}</span>
+              <span style="font-size: 10px; color: var(--text-muted);">⌄</span>
+            </button>
+            <div id="painelUserMenu" role="menu" style="display: none; position: absolute; right: 0; top: calc(100% + 8px); min-width: 190px; background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12); padding: 6px; z-index: 90;">
+              <div style="padding: 8px 10px; border-bottom: 1px solid var(--border-color, #f1f5f9); margin-bottom: 4px;">
+                <div style="font-size: 13px; font-weight: 700; color: var(--text-main, #0f172a);">{{ usuario.nome }}</div>
+                {% if usuario.email %}
+                  <div style="font-size: 11.5px; color: var(--text-muted, #64748b); word-break: break-all;">{{ usuario.email }}</div>
+                {% endif %}
+              </div>
+              <a href="{{ url_for('auth.logout') }}" role="menuitem" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; text-decoration: none; font-size: 13px; font-weight: 600; color: #b91c1c;">
+                <span>🚪</span>
+                <span>Sair</span>
+              </a>
+            </div>
           </div>
         </div>
       </header>
@@ -326,6 +340,32 @@
     });
   }
 })();
-</script>
+() {
+  const btnUser = document.getElementById("btnUserMenu");
+  const panelUser = document.getElementById("painelUserMenu");
+  if (!btnUser || !panelUser) return;
+
+  function fecharUserMenu() {
+    panelUser.style.display = "none";
+    btnUser.setAttribute("aria-expanded", "false");
+  }
+
+  btnUser.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const aberto = panelUser.style.display === "block";
+    panelUser.style.display = aberto ? "none" : "block";
+    btnUser.setAttribute("aria-expanded", aberto ? "false" : "true");
+  });
+
+  panelUser.addEventListener("click", function(e) {
+    e.stopPropagation();
+  });
+
+  document.addEventListener("click", fecharUserMenu);
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") fecharUserMenu();
+  });
+})();
+</script></script>
 </body>
 </html>
