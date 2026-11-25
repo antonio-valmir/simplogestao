@@ -402,4 +402,33 @@
 })();
 </script>
 
+<script>
+(function() {
+  const LIMITE = 10;
+  const wrapper = document.querySelector(".table-responsive");
+  const tbody = wrapper ? wrapper.querySelector("tbody") : null;
+  const searchInput = document.getElementById("localSearchInput");
+  if (!wrapper || !tbody) return;
+
+  function atualizarRolagem() {
+    const linhas = Array.from(tbody.querySelectorAll("tr[data-search]")).filter(function(tr) {
+      return tr.style.display !== "none" && !tr.hidden;
+    });
+    if (linhas.length >= LIMITE) {
+      wrapper.classList.add("scroll-limite-10");
+    } else {
+      wrapper.classList.remove("scroll-limite-10");
+    }
+  }
+
+  atualizarRolagem();
+
+  if (searchInput) {
+    searchInput.addEventListener("input", function() {
+      setTimeout(atualizarRolagem, 0);
+    });
+  }
+})();
+</script>
+
 {% endblock %}
