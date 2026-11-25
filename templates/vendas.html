@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}SimploGestão — Vendas{% endblock %}
+{% block title %}SimploGestão — Vendas
+{% endblock %}
 
 {% block content %}
 <section class="module-hero">
@@ -115,7 +116,7 @@
     <p class="muted" style="margin-bottom:14px;">Registros vinculados à empresa ativa.</p>
 
     {% if vendas %}
-    <div class="table-wrap">
+    <div class="table-wrap" id="vendas-historico-wrap">
       <table class="data-table">
         <thead>
           <tr>
@@ -145,4 +146,25 @@
     {% endif %}
   </section>
 </div>
+<script>
+(function() {
+  const LIMITE = 10;
+  const wrapper = document.getElementById("vendas-historico-wrap");
+  const tbody = wrapper ? wrapper.querySelector("tbody") : null;
+  if (!wrapper || !tbody) return;
+
+  function atualizarRolagemVendas() {
+    const linhas = Array.from(tbody.querySelectorAll("tr")).filter(function(tr) {
+      return !tr.dataset.emptyFilterRow && tr.style.display !== "none" && !tr.hidden;
+    });
+    if (linhas.length >= LIMITE) {
+      wrapper.classList.add("scroll-limite-10");
+    } else {
+      wrapper.classList.remove("scroll-limite-10");
+    }
+  }
+
+  atualizarRolagemVendas();
+})();
+</script>
 {% endblock %}
