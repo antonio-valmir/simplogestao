@@ -152,51 +152,55 @@
   <h3>Empresas cadastradas</h3>
   {% if empresas %}
   <div class="table-responsive">
-    <table class="table">
+    <table class="data-table">
       <thead>
         <tr>
-          <th>ID</th>
+          <th style="width:75px;">ID</th>
           <th>Empresa</th>
-          <th>CPF / CNPJ</th>
-          <th>Status</th>
-          <th>Sessão</th>
-          <th>Ação</th>
+          <th style="width:320px;text-align:right;">Ações</th>
         </tr>
       </thead>
       <tbody>
         {% for emp in empresas %}
+        {% set payload_emp = {
+          'id': emp.id,
+          'nome': emp.nome,
+          'documento': emp.documento,
+          'status': emp.status,
+          'nome_fantasia': emp.nome_fantasia,
+          'inscricao_estadual': emp.inscricao_estadual,
+          'inscricao_municipal': emp.inscricao_municipal,
+          'regime_tributario': emp.regime_tributario,
+          'telefone': emp.telefone,
+          'email': emp.email,
+          'responsavel': emp.responsavel,
+          'cep': emp.cep,
+          'rua': emp.rua,
+          'numero': emp.numero,
+          'complemento': emp.complemento,
+          'bairro': emp.bairro,
+          'cidade': emp.cidade,
+          'observacoes': emp.observacoes
+        } %}
         <tr>
-          <td>#{{ emp.id }}</td>
-          <td><strong>{{ emp.nome }}</strong></td>
-          <td>{{ emp.documento }}</td>
-          <td>{{ emp.status }}</td>
-          <td>
+          <td style="vertical-align:middle;"><span class="id-pill">#{{ emp.id }}</span></td>
+          <td style="vertical-align:middle;overflow-wrap:anywhere;word-break:break-word;">
+            <strong style="margin-right:10px;">{{ emp.nome }}</strong>
+            <span style="color:var(--text-muted);font-size:13px;white-space:nowrap;">{{ emp.documento or "-" }}</span>
             {% if emp.ativa %}
-              <span class="badge">Seção ativa</span>
-            {% elif emp.autenticada %}
-              <span>Autenticada na sessão</span>
-            {% else %}
-              <span>Bloqueada (pede CPF/CNPJ + senha)</span>
+              <span class="badge" style="margin-left:8px;">Seção ativa</span>
+            {% elif not emp.autenticada %}
+              <a href="{{ url_for('empresas', entrar=emp.id) }}" style="margin-left:8px;font-size:12px;">Entrar</a>
             {% endif %}
           </td>
-          <td>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-              {% if emp.ativa %}
-                <a href="{{ url_for('dashboard') }}" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:0.85rem;">Abrir painel</a>
-              {% elif emp.autenticada %}
-                <form method="post" action="{{ url_for('empresas') }}" style="display:inline;">
-                  <input type="hidden" name="acao" value="ativar_sessao">
-                  <input type="hidden" name="empresa_id" value="{{ emp.id }}">
-                  <button type="submit" class="btn-primary" style="padding:6px 12px;font-size:0.85rem;">Entrar na seção</button>
-                </form>
-              {% else %}
-                <a href="{{ url_for('empresas', entrar=emp.id) }}" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:0.85rem;opacity:0.85;">Logar com CPF/CNPJ e senha</a>
-              {% endif %}
-              <a href="{{ url_for('empresas', editar=emp.id) }}" class="btn-primary" style="text-decoration:none;padding:6px 12px;font-size:0.85rem;">Editar</a>
-              <form method="post" action="{{ url_for('empresas') }}" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta empresa?');">
+          <td style="vertical-align:middle;">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;">
+              <button type="button" class="btn-primary js-det-empresa btn-acao-padrao" data-empresa="{{ payload_emp | tojson | forceescape }}">Detalhes</button>
+              <a href="{{ url_for('empresas', editar=emp.id) }}" class="btn-primary btn-acao-padrao">Editar</a>
+              <form method="post" action="{{ url_for('empresas') }}" style="display:inline;margin:0;flex-shrink:0;" onsubmit="return confirm('Tem certeza que deseja excluir esta empresa?');">
                 <input type="hidden" name="acao" value="excluir">
                 <input type="hidden" name="empresa_id" value="{{ emp.id }}">
-                <button type="submit" class="btn-primary" style="padding:6px 12px;font-size:0.85rem;">Excluir</button>
+                <button type="submit" class="btn-primary btn-acao-padrao">Excluir</button>
               </form>
             </div>
           </td>
@@ -209,4 +213,79 @@
   <p>Nenhuma empresa cadastrada ainda.</p>
   {% endif %}
 </div>
+
+<div id="modalDetEmpresa" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;">
+  <div style="background:#ffffff;color:#0f172a;width:100%;max-width:700px;max-height:88vh;overflow-y:auto;border-radius:12px;box-shadow:0 20px 45px rgba(15,23,42,0.25);font-family:inherit;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #e2e8f0;">
+      <div>
+        <small id="mEmpId" style="display:block;color:#64748b;font-size:12px;font-weight:700;letter-spacing:0.03em;line-height:1.3;"></small>
+        <h3 id="mEmpNome" style="margin:2px 0 0 0;font-size:18px;font-weight:700;color:#0f172a;line-height:1.35;">Detalhes da Empresa</h3>
+      </div>
+      <button type="button" id="mEmpFecharX" style="background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:#475569;padding:4px 8px;">&times;</button>
+    </div>
+    <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;font-family:inherit;">
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">CPF / CNPJ</div><div id="mEmpDoc" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Nome Fantasia</div><div id="mEmpFantasia" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Status</div><div id="mEmpStatus" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Inscrição Estadual</div><div id="mEmpIe" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Inscrição Municipal</div><div id="mEmpIm" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Regime Tributário</div><div id="mEmpRegime" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Telefone / WhatsApp</div><div id="mEmpTel" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">E-mail</div><div id="mEmpEmail" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Responsável</div><div id="mEmpResp" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">CEP</div><div id="mEmpCep" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Rua / Logradouro</div><div id="mEmpRua" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Número</div><div id="mEmpNum" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Complemento</div><div id="mEmpComp" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Bairro</div><div id="mEmpBairro" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Cidade / UF</div><div id="mEmpCidade" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;">-</div></div>
+      <div style="grid-column:1 / -1;"><div style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#64748b;font-weight:700;line-height:1.3;">Observações</div><div id="mEmpObs" style="margin-top:4px;font-size:14px;font-weight:500;color:#0f172a;line-height:1.45;white-space:pre-line;">-</div></div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;">
+      <button type="button" id="mEmpFecharBtn" class="btn-primary" style="padding:8px 16px;font-size:13.5px;">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const modal = document.getElementById("modalDetEmpresa");
+  if (!modal) return;
+  const txt = v => (v && String(v).trim()) ? String(v).trim() : "-";
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const fechar = () => modal.style.setProperty("display", "none", "important");
+  document.addEventListener("click", function(e){
+    const btn = e.target.closest(".js-det-empresa");
+    if (!btn) return;
+    e.preventDefault();
+    let d = {};
+    try { d = JSON.parse(btn.getAttribute("data-empresa") || "{}"); } catch(err) {}
+    set("mEmpId", d.id ? "#" + d.id : "");
+    set("mEmpNome", txt(d.nome));
+    set("mEmpDoc", txt(d.documento));
+    set("mEmpFantasia", txt(d.nome_fantasia));
+    set("mEmpStatus", txt(d.status));
+    set("mEmpIe", txt(d.inscricao_estadual));
+    set("mEmpIm", txt(d.inscricao_municipal));
+    set("mEmpRegime", txt(d.regime_tributario));
+    set("mEmpTel", txt(d.telefone));
+    set("mEmpEmail", txt(d.email));
+    set("mEmpResp", txt(d.responsavel));
+    set("mEmpCep", txt(d.cep));
+    set("mEmpRua", txt(d.rua));
+    set("mEmpNum", txt(d.numero));
+    set("mEmpComp", (d.complemento && String(d.complemento).trim()) ? String(d.complemento).trim() : "(não informado)");
+    set("mEmpBairro", txt(d.bairro));
+    set("mEmpCidade", txt(d.cidade));
+    set("mEmpObs", txt(d.observacoes));
+    modal.style.setProperty("display", "flex", "important");
+  });
+  const bx = document.getElementById("mEmpFecharX");
+  const bb = document.getElementById("mEmpFecharBtn");
+  if (bx) bx.addEventListener("click", fechar);
+  if (bb) bb.addEventListener("click", fechar);
+  modal.addEventListener("click", function(e){ if (e.target === modal) fechar(); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape" && modal.style.display === "flex") fechar(); });
+})();
+</script>
 {% endblock %}
