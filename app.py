@@ -216,10 +216,31 @@ def _garantir_colunas_clientes(conn):
                 ADD COLUMN IF NOT EXISTS cpf VARCHAR(20),
                 ADD COLUMN IF NOT EXISTS cpf_digits VARCHAR(11),
                 ADD COLUMN IF NOT EXISTS cep VARCHAR(10),
-                ADD COLUMN IF NOT EXISTS endereco VARCHAR(200);
+                ADD COLUMN IF NOT EXISTS endereco VARCHAR(200),
+                ADD COLUMN IF NOT EXISTS rua VARCHAR(160),
+                ADD COLUMN IF NOT EXISTS numero VARCHAR(30),
+                ADD COLUMN IF NOT EXISTS complemento VARCHAR(120),
+                ADD COLUMN IF NOT EXISTS bairro VARCHAR(120),
+                ADD COLUMN IF NOT EXISTS cidade VARCHAR(120);
             """
         )
     conn.commit()
+
+
+def _montar_endereco_resumo(rua, numero, complemento, bairro, cidade, endereco_fallback=None):
+    partes = []
+    rua_num = " - ".join([p for p in [rua, numero] if p])
+    if rua_num:
+        partes.append(rua_num)
+    if complemento:
+        partes.append(complemento)
+    if bairro:
+        partes.append(bairro)
+    if cidade:
+        partes.append(cidade)
+    if partes:
+        return ", ".join(partes)[:200]
+    return (endereco_fallback or "")[:200] or None
 
 
 @app.route("/clientes", methods=["GET", "POST"])
@@ -243,7 +264,14 @@ def clientes():
                 telefone = (request.form.get("telefone") or "").strip() or None
                 email = (request.form.get("email") or "").strip() or None
                 cep = (request.form.get("cep") or "").strip() or None
-                endereco = (request.form.get("endereco") or "").strip() or None
+                rua = (request.form.get("rua") or "").strip() or None
+                numero = (request.form.get("numero") or "").strip() or None
+                complemento = (request.form.get("complemento") or "").strip() or None
+                bairro = (request.form.get("bairro") or "").strip() or None
+                cidade = (request.form.get("cidade") or "").strip() or None
+                endereco = _montar_endereco_resumo(
+                    rua, numero, complemento, bairro, cidade, request.form.get("endereco")
+                )
 
                 if not cli_id:
                     flash("Cliente invalido para edicao.", "warning")
@@ -280,10 +308,19 @@ def clientes():
                                    telefone = %s,
                                    email = %s,
                                    cep = %s,
-                                   endereco = %s
+                                   endereco = %s,
+                                   rua = %s,
+                                   numero = %s,
+                                   complemento = %s,
+                                   bairro = %s,
+                                   cidade = %s
                              WHERE id = %s AND empresa_id = %s;
                             """,
-                            (nome, cpf, cpf_digits, telefone, email, cep, endereco, cli_id, empresa_id),
+                            (
+                                nome, cpf, cpf_digits, telefone, email, cep, endereco,
+                                rua, numero, complemento, bairro, cidade,
+                                cli_id, empresa_id,
+                            ),
                         )
                         atualizado = cur.rowcount
                     conn.commit()
@@ -348,7 +385,14 @@ def clientes():
                 telefone = (request.form.get("telefone") or "").strip() or None
                 email = (request.form.get("email") or "").strip() or None
                 cep = (request.form.get("cep") or "").strip() or None
-                endereco = (request.form.get("endereco") or "").strip() or None
+                rua = (request.form.get("rua") or "").strip() or None
+                numero = (request.form.get("numero") or "").strip() or None
+                complemento = (request.form.get("complemento") or "").strip() or None
+                bairro = (request.form.get("bairro") or "").strip() or None
+                cidade = (request.form.get("cidade") or "").strip() or None
+                endereco = _montar_endereco_resumo(
+                    rua, numero, complemento, bairro, cidade, request.form.get("endereco")
+                )
 
                 if not nome:
                     flash("Informe o nome completo do cliente.", "warning")
@@ -374,10 +418,16 @@ def clientes():
                         with conn.cursor() as cur:
                             cur.execute(
                                 """
-                                INSERT INTO clientes (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                                INSERT INTO clientes (
+                                    empresa_id, nome, cpf, cpf_digits, telefone, email,
+                                    cep, endereco, rua, numero, complemento, bairro, cidade
+                                )
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                                 """,
-                                (empresa_id, nome, cpf, cpf_digits, telefone, email, cep, endereco),
+                                (
+                                    empresa_id, nome, cpf, cpf_digits, telefone, email,
+                                    cep, endereco, rua, numero, complemento, bairro, cidade,
+                                ),
                             )
                         conn.commit()
                         flash("Cliente cadastrado com sucesso.", "success")
@@ -387,7 +437,7 @@ def clientes():
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, nome, cpf, telefone, email, cep, endereco
+                SELECT id, nome, cpf, telefone, email, cep, endereco, rua, numero, complemento, bairro, cidade
                 FROM clientes
                 WHERE empresa_id = %s
                 ORDER BY id DESC;
